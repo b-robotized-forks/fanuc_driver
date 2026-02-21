@@ -126,3 +126,5 @@ install(FILES
     DESTINATION
     ${CMAKE_INSTALL_LIBDIR}/cmake/fanuc_libs
 )
+
+ament_package()
