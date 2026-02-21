@@ -8,6 +8,8 @@ project(fanuc_libs VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
+find_package(ament_cmake REQUIRED)
+
 # Build the sockpp library
 include(FetchContent)
 FetchContent_Declare(
@@ -121,3 +123,5 @@ install(FILES
     DESTINATION
     ${CMAKE_INSTALL_LIBDIR}/cmake/fanuc_libs
 )
+
+ament_package()
