@@ -124,4 +124,6 @@ install(FILES
     ${CMAKE_INSTALL_LIBDIR}/cmake/fanuc_libs
 )
 
+ament_export_targets(fanuc_libsExports HAS_LIBRARY_TARGET)
+ament_export_libraries(stream_motion rmi fanuc_client gpio_config)
 ament_package()
