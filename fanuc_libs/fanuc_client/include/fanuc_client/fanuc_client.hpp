@@ -119,8 +119,6 @@ private:
 private:
   void readStateFromQueue();
 
-  void streamMotionThread(const Eigen::VectorXd& joint_angles);
-
   /** Grab the limits from the robot.*/
   void fetchRobotLimits();
 
@@ -159,9 +157,6 @@ private:
 
   // Output command interpolation buffer target size for stream motion control
   uint32_t out_cmd_interp_buff_target_;
-
-  struct PQueueImpl;
-  std::unique_ptr<PQueueImpl> p_queue_impl_;
 };
 
 class RMISingleton
