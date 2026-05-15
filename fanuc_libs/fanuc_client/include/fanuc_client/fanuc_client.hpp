@@ -160,8 +160,6 @@ private:
 private:
   void readStateFromQueue();
 
-  void streamMotionThread(const Eigen::VectorXd& joint_angles);
-
   /** Grab the limits from the robot.*/
   void fetchRobotLimits();
 
@@ -205,9 +203,6 @@ private:
 
   // Force sensor default type
   uint32_t force_sensor_type_;
-
-  struct PQueueImpl;
-  std::unique_ptr<PQueueImpl> p_queue_impl_;
 };
 
 class RMISingleton
