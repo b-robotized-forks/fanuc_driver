@@ -84,7 +84,6 @@ FanucClient::FanucClient(std::string robot_ip, const uint16_t stream_motion_port
   , rmi_connection_{ rmi_connection_interface == nullptr ?
                          RMISingleton::creatNewRMIInstance(robot_ip_, rmi_port_) :
                          RMISingleton::setRMIInstance(std::move(rmi_connection_interface)) }
-  , out_cmd_interp_buff_target_{ 8 }
   , force_sensor_type_{ 0 }
 {
   rmi_connection_->connect(5);
@@ -162,45 +161,6 @@ FanucClient::~FanucClient()
   restoreSignalHandler();
 }
 
-void FanucClient::readStateFromQueue()
-{
-  stream_motion::RobotStatusPacket robot_status;
-  bool updated = false;
-  while (p_queue_impl_->robot_state_queue_.try_dequeue(robot_status))
-  {
-    updated = true;
-  }
-  if (!updated)
-  {
-    return;
-  }
-
-  for (Eigen::Index i = 0; i < robot_status.joint_angle.size(); ++i)
-  {
-    last_joint_angles_[i] = static_cast<double>(robot_status.joint_angle[i]);
-  }
-
-  if (gpio_buffer_ != nullptr)
-  {
-    gpio_buffer_->status_buffer() = robot_status.io_status;
-  }
-
-  robot_status_.in_error = robot_status.robot_status & 0x1;
-  robot_status_.tp_enabled = robot_status.robot_status & 0x2;
-  robot_status_.e_stopped = robot_status.robot_status & 0x4;
-  robot_status_.motion_possible = robot_status.status & 0x1;
-  robot_status_.contact_stop_mode = ToContactStopMode(robot_status.contact_stop_status);
-  robot_status_.safety_scale = robot_status.safety_scale;
-
-  force_sensor_.force_x = robot_status.force_x;
-  force_sensor_.force_y = robot_status.force_y;
-  force_sensor_.force_z = robot_status.force_z;
-  force_sensor_.moment_x = robot_status.moment_x;
-  force_sensor_.moment_y = robot_status.moment_y;
-  force_sensor_.moment_z = robot_status.moment_z;
-  force_sensor_.fs_type = robot_status.fs_type;
-}
-
 void FanucClient::writeJointTarget(const Eigen::VectorXd& joint_targets)
 {
   AssertIsStreaming(is_streaming_);
@@ -272,8 +232,15 @@ Eigen::Ref<const Eigen::VectorXd> FanucClient::readJointAngles()
   robot_status_.contact_stop_mode = ToContactStopMode(robot_status.contact_stop_status);
   robot_status_.safety_scale = robot_status.safety_scale;
 
-  return last_joint_angles_;
+  force_sensor_.force_x = robot_status.force_x;
+  force_sensor_.force_y = robot_status.force_y;
+  force_sensor_.force_z = robot_status.force_z;
+  force_sensor_.moment_x = robot_status.moment_x;
+  force_sensor_.moment_y = robot_status.moment_y;
+  force_sensor_.moment_z = robot_status.moment_z;
+  force_sensor_.fs_type = robot_status.fs_type;
 
+  return last_joint_angles_;
 }
 
 void FanucClient::fetchRobotLimits()

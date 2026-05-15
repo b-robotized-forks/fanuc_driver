@@ -361,7 +361,6 @@ FanucHardwareInterface::on_configure(const rclcpp_lifecycle::State& /*previous_s
     {
       fanuc_client_.reset();
       fanuc_client_ = std::make_unique<fanuc_client::FanucClient>(ip_address_, stream_motion_port_, rmi_port_);
-      fanuc_client_->setOutCmdInterpBuffTarget(out_cmd_interp_buff_target_);
       fanuc_client_->setForceSensorType(force_sensor_type_);
       fanuc_client_->startRMI();
       fanuc_client_->setPayloadSchedule(payload_schedule_);
@@ -583,14 +582,13 @@ hardware_interface::return_type FanucHardwareInterface::write(const rclcpp::Time
 
   try
   {
-    joint_targets_degrees_.array() = 180.0 / M_PI * joint_targets_.array();
-    fanuc_client_->writeJointTarget(joint_targets_degrees_);
-
     for (const auto& io_command : io_commands_)
     {
       io_command->updateBuffer();
     }
-    fanuc_client_->sendIOCommand();
+
+    joint_targets_degrees_.array() = 180.0 / M_PI * joint_targets_.array();
+    fanuc_client_->writeJointTarget(joint_targets_degrees_);
   }
   catch (const std::exception& e)
   {

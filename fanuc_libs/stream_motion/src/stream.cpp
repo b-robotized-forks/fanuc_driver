@@ -150,7 +150,7 @@ struct StreamMotionConnection::PSocketImpl
 
     // FULLY BLOCKING HERE!
     int nfds = epoll_wait(epoll_fd, events, 1, timeout_ms);
-    
+
     if (nfds == -1) {
       if (errno == EINTR) return false;
       throw std::runtime_error("epoll_wait failed");
@@ -163,6 +163,8 @@ struct StreamMotionConnection::PSocketImpl
     constexpr size_t kPacketNumBytes = sizeof(T);
     sockpp::result<size_t> res = sock.recv(&value, kPacketNumBytes);
     if (res != kPacketNumBytes) {
+      std::cerr << "Incomplete packet received. Expected " << kPacketNumBytes
+              << " but got " << res.value() << std::endl;
       return false;
     }
 
@@ -408,9 +410,11 @@ void StreamMotionConnection::sendCommand(const std::array<double, kMaxAxisNumber
 
 bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
 {
-  if (command_sequence_no_ == status_sequence_no_)
+  status = RobotStatusPacket{};
+
+  // This blcoks for 2ms!
+  if (!socket_impl_->receive(status))
   {
-    status = RobotStatusPacket{};
     bool received = false;
 
     // Check version_no_ and create dummy status packet if needed to keep backward compatibility
@@ -439,44 +443,27 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
         status.fs_type = 0;
       }
     }
-    else
-    {
-      received = socket_impl_->receive(status);
-    }
 
     if (!received)
     {
       std::cerr << "Fail to get status packet." << std::endl;
       return false;
     }
-
-    status_sequence_no_++;
-
-    // Swap the bits of the received status packet
-    swapRobotStatusPacketBytes(status);
-
-    if (status_sequence_no_ != status.sequence_no)
-    {
-      std::cerr << "Status seq skipped. Expected seq: " << status_sequence_no_
-                << " Received seq: " << status.sequence_no << std::endl;
-      status_sequence_no_ = status.sequence_no;
-    }
   }
-  else if (command_sequence_no_ < status_sequence_no_)
+
+  swapRobotStatusPacketBytes(status);
+
+  // check if we dropped a packet on the network, but don't crash
+  if (status_sequence_no_ != 0 && status.sequence_no != status_sequence_no_ + 1)
   {
-    std::cerr << "Command lagging behind. Command seq: " << command_sequence_no_
-              << " Status seq: " << status_sequence_no_ << std::endl;
-    std::cerr << "Sending extra command to catch up." << std::endl;
-  }
-  else
-  {
-    std::cerr << "Command seq exceeded status seq. Command seq: " << command_sequence_no_
-              << " Status seq: " << status_sequence_no_ << std::endl;
-    std::cerr << "This should not happen. Something is wrong. Need to abort." << std::endl;
-    return false;
+    std::cerr << "Packet drop detected. Expected seq: " << (status_sequence_no_ + 1)
+              << " Received seq: " << status.sequence_no << std::endl;
   }
 
-  command_sequence_no_++;
+  status_sequence_no_ = status.sequence_no;
+
+  // we're in a strict 1:1 synchronous loop, we reply with the exact sequence number we just received.
+  command_sequence_no_ = status.sequence_no;
 
   return true;
 }

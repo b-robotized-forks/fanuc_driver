@@ -92,16 +92,6 @@ public:
 
   void validateGPIOBuffer(const std::shared_ptr<GPIOBuffer>& gpio_buffer) const;
 
-  void setOutCmdInterpBuffTarget(uint32_t out_cmd_interp_buff_target)
-  {
-    out_cmd_interp_buff_target_ = out_cmd_interp_buff_target;
-  }
-
-  uint32_t getOutCmdInterpBuffTarget() const
-  {
-    return out_cmd_interp_buff_target_;
-  }
-
   void setForceSensorType(uint32_t force_sensor_type)
   {
     force_sensor_type_ = force_sensor_type;
