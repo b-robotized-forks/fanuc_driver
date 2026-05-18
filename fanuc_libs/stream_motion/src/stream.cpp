@@ -411,44 +411,43 @@ void StreamMotionConnection::sendCommand(const std::array<double, kMaxAxisNumber
 bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
 {
   status = RobotStatusPacket{};
-
-  // This blcoks for 2ms!
-  if (!socket_impl_->receive(status))
+  bool received = false;
+  
+  // Check version_no_ and create dummy status packet if needed to keep backward compatibility
+  // ROS 2 will always use the newest status packet RobotStatusPacket
+  if (version_no_ <= 3)
   {
-    bool received = false;
-
-    // Check version_no_ and create dummy status packet if needed to keep backward compatibility
-    // ROS 2 will always use the newest status packet RobotStatusPacket
-    if (version_no_ <= 3)
+    V3RobotStatusPacket dummy_status{};
+    // This blocks for 2ms!
+    received = socket_impl_->receive(dummy_status);
+    if (received)
     {
-      V3RobotStatusPacket dummy_status{};
-      received = socket_impl_->receive(dummy_status);
-      if (received)
-      {
-        // Calculate start pointer for the last 256 bytes (io points)
-        char* status_io_ptr = reinterpret_cast<char*>(&status) + (sizeof(RobotStatusPacket) - kMaxIOSize);
-        char* dummy_status_io_ptr = reinterpret_cast<char*>(&dummy_status) + (sizeof(V3RobotStatusPacket) - kMaxIOSize);
+      // Calculate start pointer for the last 256 bytes (io points)
+      char* status_io_ptr = reinterpret_cast<char*>(&status) + (sizeof(RobotStatusPacket) - kMaxIOSize);
+      char* dummy_status_io_ptr = reinterpret_cast<char*>(&dummy_status) + (sizeof(V3RobotStatusPacket) - kMaxIOSize);
 
-        // Copy data from dummy_status to status
-        std::memcpy(&status, &dummy_status, sizeof(V3RobotStatusPacket) - kMaxIOSize);
-        std::memcpy(status_io_ptr, dummy_status_io_ptr, kMaxIOSize);
+      // Copy data from dummy_status to status
+      std::memcpy(&status, &dummy_status, sizeof(V3RobotStatusPacket) - kMaxIOSize);
+      std::memcpy(status_io_ptr, dummy_status_io_ptr, kMaxIOSize);
 
-        // Set all the status forces to 0
-        status.force_x = 0.0;
-        status.force_y = 0.0;
-        status.force_z = 0.0;
-        status.moment_x = 0.0;
-        status.moment_y = 0.0;
-        status.moment_z = 0.0;
-        status.fs_type = 0;
-      }
+      // Set all the status forces to 0
+      status.force_x = 0.0;
+      status.force_y = 0.0;
+      status.force_z = 0.0;
+      status.moment_x = 0.0;
+      status.moment_y = 0.0;
+      status.moment_z = 0.0;
+      status.fs_type = 0;
     }
+  }
+  else
+  {
+    received = socket_impl_->receive(status);
+  }
 
-    if (!received)
-    {
-      std::cerr << "Fail to get status packet." << std::endl;
-      return false;
-    }
+  if (!received) {
+    std::cerr << "Fail to get status packet." << std::endl;
+    return false;
   }
 
   swapRobotStatusPacketBytes(status);
