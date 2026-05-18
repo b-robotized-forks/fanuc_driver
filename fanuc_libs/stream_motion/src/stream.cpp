@@ -417,56 +417,75 @@ void StreamMotionConnection::sendCommand(const std::array<double, kMaxAxisNumber
 
 bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
 {
-  status = RobotStatusPacket{};
-  bool received = false;
-  
-  // Check version_no_ and create dummy status packet if needed to keep backward compatibility
-  // ROS 2 will always use the newest status packet RobotStatusPacket
-  if (version_no_ <= 3)
+  if (command_sequence_no_ == status_sequence_no_)
   {
-    V3RobotStatusPacket dummy_status{};
-    // This blocks for 2ms!
-    received = socket_impl_->receive(dummy_status);
-    if (received)
+    status = RobotStatusPacket{};
+    bool received = false;
+    
+    // Check version_no_ and create dummy status packet if needed to keep backward compatibility
+    // ROS 2 will always use the newest status packet RobotStatusPacket
+    
+    if (version_no_ <= 3)
     {
-      // Calculate start pointer for the last 256 bytes (io points)
-      char* status_io_ptr = reinterpret_cast<char*>(&status) + (sizeof(RobotStatusPacket) - kMaxIOSize);
-      char* dummy_status_io_ptr = reinterpret_cast<char*>(&dummy_status) + (sizeof(V3RobotStatusPacket) - kMaxIOSize);
+        V3RobotStatusPacket dummy_status{};
+        // This blocks for 2ms!
+        received = socket_impl_->receive(dummy_status);
+        if (received)
+        {
+        // Calculate start pointer for the last 256 bytes (io points)
+        char* status_io_ptr = reinterpret_cast<char*>(&status) + (sizeof(RobotStatusPacket) - kMaxIOSize);
+        char* dummy_status_io_ptr = reinterpret_cast<char*>(&dummy_status) + (sizeof(V3RobotStatusPacket) - kMaxIOSize);
 
-      // Copy data from dummy_status to status
-      std::memcpy(&status, &dummy_status, sizeof(V3RobotStatusPacket) - kMaxIOSize);
-      std::memcpy(status_io_ptr, dummy_status_io_ptr, kMaxIOSize);
+        // Copy data from dummy_status to status
+        std::memcpy(&status, &dummy_status, sizeof(V3RobotStatusPacket) - kMaxIOSize);
+        std::memcpy(status_io_ptr, dummy_status_io_ptr, kMaxIOSize);
 
-      // Set all the status forces to 0
-      status.force_x = 0.0;
-      status.force_y = 0.0;
-      status.force_z = 0.0;
-      status.moment_x = 0.0;
-      status.moment_y = 0.0;
-      status.moment_z = 0.0;
-      status.fs_type = 0;
+        // Set all the status forces to 0
+        status.force_x = 0.0;
+        status.force_y = 0.0;
+        status.force_z = 0.0;
+        status.moment_x = 0.0;
+        status.moment_y = 0.0;
+        status.moment_z = 0.0;
+        status.fs_type = 0;
+        }
     }
+    else
+    {
+        received = socket_impl_->receive(status);
+    }
+
+    if (!received) {
+        std::cerr << "Fail to get status packet." << std::endl;
+        return false;
+    }
+
+    status_sequence_no_++;
+
+    // Swap the bits of the received status packet
+    swapRobotStatusPacketBytes(status);
+
+    if (status_sequence_no_ != status.sequence_no)
+    {
+      std::cerr << "Status seq skipped. Expected seq: " << status_sequence_no_
+                << " Received seq: " << status.sequence_no << std::endl;
+      status_sequence_no_ = status.sequence_no;
+    }
+  }
+  else if (command_sequence_no_ < status_sequence_no_)
+  {
+    std::cerr << "Command lagging behind. Command seq: " << command_sequence_no_
+              << " Status seq: " << status_sequence_no_ << std::endl;
+    std::cerr << "Sending extra command to catch up." << std::endl;
   }
   else
   {
-    received = socket_impl_->receive(status);
-  }
-
-  if (!received) {
-    std::cerr << "Fail to get status packet." << std::endl;
+    std::cerr << "Command seq exceeded status seq. Command seq: " << command_sequence_no_
+              << " Status seq: " << status_sequence_no_ << std::endl;
+    std::cerr << "This should not happen. Something is wrong. Need to abort." << std::endl;
     return false;
   }
 
-  swapRobotStatusPacketBytes(status);
-
-  // check if we dropped a packet on the network, but don't crash
-  if (status_sequence_no_ != 0 && status.sequence_no != status_sequence_no_ + 1)
-  {
-    std::cerr << "Packet drop detected. Expected seq: " << (status_sequence_no_ + 1)
-              << " Received seq: " << status.sequence_no << std::endl;
-  }
-
-  status_sequence_no_ = status.sequence_no;
   command_sequence_no_++;
   
   return true;
