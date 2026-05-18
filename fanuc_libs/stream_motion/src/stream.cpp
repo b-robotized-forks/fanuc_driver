@@ -414,6 +414,7 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
   {
     status = RobotStatusPacket{};
     bool received = false;
+
     // Check version_no_ and create dummy status packet if needed to keep backward compatibility
     // ROS 2 will always use the newest status packet RobotStatusPacket
     if (version_no_ <= 3)
