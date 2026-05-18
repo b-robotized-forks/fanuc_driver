@@ -467,10 +467,8 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
   }
 
   status_sequence_no_ = status.sequence_no;
-
-  // we're in a strict 1:1 synchronous loop, we reply with the exact sequence number we just received.
-  command_sequence_no_ = status.sequence_no;
-
+  command_sequence_no_++;
+  
   return true;
 }
 
