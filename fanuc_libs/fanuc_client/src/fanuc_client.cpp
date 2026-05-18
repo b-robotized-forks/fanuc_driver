@@ -78,7 +78,7 @@ FanucClient::FanucClient(std::string robot_ip, const uint16_t stream_motion_port
   , stream_motion_port_{ stream_motion_port }
   , rmi_port_{ rmi_port }
   , stream_motion_{ stream_motion_interface == nullptr ?
-                        std::make_unique<stream_motion::StreamMotionConnection>(robot_ip_, 0.005, stream_motion_port_) :
+                        std::make_unique<stream_motion::StreamMotionConnection>(robot_ip_, 1.0, stream_motion_port_) :
                         std::move(stream_motion_interface) }
   , command_pos{}
   , rmi_connection_{ rmi_connection_interface == nullptr ?
