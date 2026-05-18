@@ -144,7 +144,7 @@ struct StreamMotionConnection::PSocketImpl
   {
     value = T();
 
-    // signle epoll event on the stsack
+    // signle epoll event on the stack
     struct epoll_event events[1];
     int timeout_ms = static_cast<int>(timeout * 1000.0);
 
