@@ -421,14 +421,12 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
   {
     status = RobotStatusPacket{};
     bool received = false;
-    
     // Check version_no_ and create dummy status packet if needed to keep backward compatibility
     // ROS 2 will always use the newest status packet RobotStatusPacket
-    
     if (version_no_ <= 3)
     {
         V3RobotStatusPacket dummy_status{};
-        // This blocks for 2ms!
+        // This blocks!
         received = socket_impl_->receive(dummy_status);
         if (received)
         {
@@ -448,14 +446,15 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
         status.moment_y = 0.0;
         status.moment_z = 0.0;
         status.fs_type = 0;
-        }
+      }
     }
     else
     {
-        received = socket_impl_->receive(status);
+      received = socket_impl_->receive(status);
     }
 
-    if (!received) {
+    if (!received)
+    {
         std::cerr << "Fail to get status packet." << std::endl;
         return false;
     }
@@ -487,7 +486,6 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
   }
 
   command_sequence_no_++;
-  
   return true;
 }
 
