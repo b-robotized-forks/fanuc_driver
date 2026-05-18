@@ -470,34 +470,11 @@ hardware_interface::return_type FanucHardwareInterface::read(const rclcpp::Time&
                                                              const rclcpp::Duration& period)
 {
   robot_status_.is_connected = fanuc_client_ != nullptr && fanuc_client_->isStreaming();
+  // During INACTIVE, only read() is running.
+  // Quielty return if we're inactive. If we fail when Active, read() will return error anywatys and deactivate.
   if (!robot_status_.is_connected)
   {
-    if (fanuc_client_ != nullptr)
-    {
-      try
-      {
-        fanuc_client_->stopRealtimeStream();
-      }
-      catch (const std::runtime_error& e)
-      {
-        RCLCPP_DEBUG(rclcpp::get_logger(kFRHWInterface), "Stream already stopped: %s", e.what());
-      }
-      catch (...)
-      {
-        // Catch any other exceptions during shutdown
-        RCLCPP_DEBUG(rclcpp::get_logger(kFRHWInterface), "Exception during stream shutdown (likely normal)");
-      }
-    }
-
-    static auto last_log_time = std::chrono::steady_clock::now();
-    auto now = std::chrono::steady_clock::now();
-    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_log_time).count() > 5000)
-    {
-      RCLCPP_WARN(rclcpp::get_logger(kFRHWInterface),
-                  "FANUC ROS2 HW no longer streaming (this is normal during shutdown).");
-      last_log_time = now;
-    }
-    return hardware_interface::return_type::ERROR;
+    return hardware_interface::return_type::OK;
   }
 
   try
