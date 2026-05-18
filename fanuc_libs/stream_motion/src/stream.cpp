@@ -425,11 +425,11 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
     // ROS 2 will always use the newest status packet RobotStatusPacket
     if (version_no_ <= 3)
     {
-        V3RobotStatusPacket dummy_status{};
-        // This blocks!
-        received = socket_impl_->receive(dummy_status);
-        if (received)
-        {
+      V3RobotStatusPacket dummy_status{};
+      // This blocks!
+      received = socket_impl_->receive(dummy_status);
+      if (received)
+      {
         // Calculate start pointer for the last 256 bytes (io points)
         char* status_io_ptr = reinterpret_cast<char*>(&status) + (sizeof(RobotStatusPacket) - kMaxIOSize);
         char* dummy_status_io_ptr = reinterpret_cast<char*>(&dummy_status) + (sizeof(V3RobotStatusPacket) - kMaxIOSize);
