@@ -455,8 +455,8 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
 
     if (!received)
     {
-        std::cerr << "Fail to get status packet." << std::endl;
-        return false;
+      std::cerr << "Fail to get status packet." << std::endl;
+      return false;
     }
 
     status_sequence_no_++;
