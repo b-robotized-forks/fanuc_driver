@@ -555,7 +555,7 @@ hardware_interface::return_type FanucHardwareInterface::write(const rclcpp::Time
       last_log_time = now;
     }
     return hardware_interface::return_type::ERROR;
-  }
+  } 
 
   try
   {
@@ -565,6 +565,16 @@ hardware_interface::return_type FanucHardwareInterface::write(const rclcpp::Time
     }
 
     joint_targets_degrees_.array() = 180.0 / M_PI * joint_targets_.array();
+
+    RCLCPP_INFO_THROTTLE(
+    this->get_logger(),
+    *this->get_clock(),
+    200,
+    "Joint commands (rad): [%.5f, %.5f, %.5f, %.5f, %.5f, %.5f]",
+    joint_targets_[0], joint_targets_[1], joint_targets_[2],
+    joint_targets_[3], joint_targets_[4], joint_targets_[5]
+    );
+
     fanuc_client_->writeJointTarget(joint_targets_degrees_);
   }
   catch (const std::exception& e)

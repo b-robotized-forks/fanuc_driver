@@ -396,6 +396,13 @@ void swapControllerCapabilityResponseBytes(ControllerCapabilityResultPacket& con
 void StreamMotionConnection::sendCommand(const std::array<double, kMaxAxisNumber>& command_pos,
                                          const bool is_last_command, const std::array<uint8_t, 256>& io_command) const
 {
+  std::cerr << "command_pos: [";
+  for (double pos : command_pos)
+  {
+    std::cerr << pos << ", ";
+  }
+  std::cerr << "]\n";
+
   CommandPacket command{};
   command.version_no = version_no_;
   command.command_pos = command_pos;
