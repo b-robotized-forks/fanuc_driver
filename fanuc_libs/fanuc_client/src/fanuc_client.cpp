@@ -182,6 +182,9 @@ void FanucClient::writeJointTarget(const Eigen::VectorXd& joint_targets)
   }
 
   // push to the socket
+  // maybe total number of command we sent is different that the sequence number?
+  std::cout << "total cmds sent: "<< total_commands_sent_ << std::endl;
+  total_commands_sent_++;
   stream_motion_->sendCommand(command_pos, !is_streaming_, command_io);
 }
 
@@ -386,7 +389,9 @@ void FanucClient::startRealtimeStream(std::shared_ptr<GPIOBuffer> gpio_buffer)
     last_joint_angles_[i] = static_cast<double>(status.joint_angle[i]);
     command_pos[i] = static_cast<double>(status.joint_angle[i]);
   }
-
+  // maybe total number of command we sent is different that the sequence number?
+  std::cout << "total cmds sent: "<< total_commands_sent_ << std::endl;
+  total_commands_sent_++;
   stream_motion_->sendCommand(command_pos, false, {});
 }
 

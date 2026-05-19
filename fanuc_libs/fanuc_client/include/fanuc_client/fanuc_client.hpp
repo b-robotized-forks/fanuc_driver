@@ -154,6 +154,7 @@ private:
   const std::string robot_ip_;
   const uint16_t stream_motion_port_;
   const uint16_t rmi_port_;
+  uint32_t total_commands_sent_ = 0;
 
   // Limits
   Eigen::MatrixXd vel_limits_no_load_ = Eigen::MatrixXd::Zero(9, 20);
