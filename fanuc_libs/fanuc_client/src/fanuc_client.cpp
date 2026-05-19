@@ -90,6 +90,7 @@ FanucClient::FanucClient(std::string robot_ip, const uint16_t stream_motion_port
   stream_motion::ControllerCapabilityResultPacket controller_capability;
   stream_motion_->getControllerCapability(controller_capability);
   control_period_ = controller_capability.sampling_rate;
+  std::cout << "Control period: "<< control_period_ << std::endl;
   client_version_ = controller_capability.available_version;
   fetchRobotLimits();
 
