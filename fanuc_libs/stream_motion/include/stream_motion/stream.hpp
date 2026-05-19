@@ -15,6 +15,8 @@ namespace stream_motion
 class StreamMotionInterface
 {
 public:
+  uint32_t total_commands_sent_ = 0;
+  
   StreamMotionInterface() = default;
   virtual ~StreamMotionInterface() = default;
 
