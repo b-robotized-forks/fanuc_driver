@@ -400,7 +400,7 @@ void StreamMotionConnection::sendCommand(const std::array<double, kMaxAxisNumber
   CommandPacket command{};
   command.version_no = version_no_;
   command.command_pos = command_pos;
-  command.sequence_no = command_sequence_no_;
+  command.sequence_no = command_sequence_no_++;
   command.is_last_command = is_last_command;
   command.do_motn_ctrl = 1;
   command.unused = kCommandPacketUnused;
@@ -481,7 +481,7 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
     return false;
   }
 
-  command_sequence_no_++;
+  
   return true;
 }
 
