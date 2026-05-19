@@ -396,6 +396,7 @@ void swapControllerCapabilityResponseBytes(ControllerCapabilityResultPacket& con
 void StreamMotionConnection::sendCommand(const std::array<double, kMaxAxisNumber>& command_pos,
                                          const bool is_last_command, const std::array<uint8_t, 256>& io_command) const
 {
+  std::cerr << "- command_sequence_no: "<< command_sequence_no_ << std::endl;
   CommandPacket command{};
   command.version_no = version_no_;
   command.command_pos = command_pos;
@@ -410,6 +411,7 @@ void StreamMotionConnection::sendCommand(const std::array<double, kMaxAxisNumber
 
 bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
 {
+  std::cerr << "- status_sequence_no: "<< status_sequence_no_ << std::endl;
   if (command_sequence_no_ == status_sequence_no_)
   {
     status = RobotStatusPacket{};
