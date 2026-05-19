@@ -70,14 +70,6 @@ constexpr ContactStopMode ToContactStopMode(stream_motion::ContactStopStatus sta
 
 }  // namespace
 
-struct FanucClient::PQueueImpl
-{
-  using StampedEigen = std::tuple<std::chrono::duration<double>, Eigen::VectorXd>;
-  // TODO: Consider merging the command and command_io queues.
-  moodycamel::BlockingReaderWriterQueue<StampedEigen> command_queue_;
-  moodycamel::BlockingReaderWriterQueue<std::array<uint8_t, 256>> command_io_queue_;
-  moodycamel::BlockingReaderWriterQueue<stream_motion::RobotStatusPacket> robot_state_queue_;
-};
 
 FanucClient::FanucClient(std::string robot_ip, const uint16_t stream_motion_port, const uint16_t rmi_port,
                          std::unique_ptr<stream_motion::StreamMotionInterface> stream_motion_interface,
@@ -92,14 +84,13 @@ FanucClient::FanucClient(std::string robot_ip, const uint16_t stream_motion_port
   , rmi_connection_{ rmi_connection_interface == nullptr ?
                          RMISingleton::creatNewRMIInstance(robot_ip_, rmi_port_) :
                          RMISingleton::setRMIInstance(std::move(rmi_connection_interface)) }
-  , out_cmd_interp_buff_target_{ 8 }
   , force_sensor_type_{ 0 }
-  , p_queue_impl_(std::make_unique<PQueueImpl>())
 {
   rmi_connection_->connect(5);
   stream_motion::ControllerCapabilityResultPacket controller_capability;
   stream_motion_->getControllerCapability(controller_capability);
   control_period_ = controller_capability.sampling_rate;
+  std::cout << "Control period: "<< control_period_ << "ms" << std::endl;
   client_version_ = controller_capability.available_version;
   fetchRobotLimits();
 
@@ -171,57 +162,29 @@ FanucClient::~FanucClient()
   restoreSignalHandler();
 }
 
-void FanucClient::readStateFromQueue()
-{
-  stream_motion::RobotStatusPacket robot_status;
-  bool updated = false;
-  while (p_queue_impl_->robot_state_queue_.try_dequeue(robot_status))
-  {
-    updated = true;
-  }
-  if (!updated)
-  {
-    return;
-  }
-
-  for (Eigen::Index i = 0; i < robot_status.joint_angle.size(); ++i)
-  {
-    last_joint_angles_[i] = static_cast<double>(robot_status.joint_angle[i]);
-  }
-
-  if (gpio_buffer_ != nullptr)
-  {
-    gpio_buffer_->status_buffer() = robot_status.io_status;
-  }
-
-  robot_status_.in_error = robot_status.robot_status & 0x1;
-  robot_status_.tp_enabled = robot_status.robot_status & 0x2;
-  robot_status_.e_stopped = robot_status.robot_status & 0x4;
-  robot_status_.motion_possible = robot_status.status & 0x1;
-  robot_status_.contact_stop_mode = ToContactStopMode(robot_status.contact_stop_status);
-  robot_status_.safety_scale = robot_status.safety_scale;
-
-  force_sensor_.force_x = robot_status.force_x;
-  force_sensor_.force_y = robot_status.force_y;
-  force_sensor_.force_z = robot_status.force_z;
-  force_sensor_.moment_x = robot_status.moment_x;
-  force_sensor_.moment_y = robot_status.moment_y;
-  force_sensor_.moment_z = robot_status.moment_z;
-  force_sensor_.fs_type = robot_status.fs_type;
-}
-
 void FanucClient::writeJointTarget(const Eigen::VectorXd& joint_targets)
 {
   AssertIsStreaming(is_streaming_);
-  readStateFromQueue();
-  last_joint_angles_cmd_ = joint_targets;
 
-  if (joint_targets.size() != last_joint_angles_.size())
-  {
-    throw std::invalid_argument("Joint targets size does not match the size of last joint angles.");
+  if (joint_targets.size() != command_pos.size()) {
+    throw std::invalid_argument("Joint targets size mismatch.");
   }
-  auto cur_time_from_start = std::chrono::high_resolution_clock::now() - start_time_;
-  p_queue_impl_->command_queue_.enqueue({ cur_time_from_start, last_joint_angles_cmd_ });
+
+  // write pos
+  for (Eigen::Index i = 0; i < joint_targets.size(); ++i) {
+    command_pos[i] = joint_targets[i];
+  }
+
+  // fetch IO state
+  std::array<uint8_t, 256> command_io{};
+  if (gpio_buffer_ != nullptr) {
+    command_io = gpio_buffer_->command_buffer();
+  }
+
+  // push to the socket
+  // maybe total number of command we sent is different that the sequence number?
+  stream_motion_->total_commands_sent_++;
+  stream_motion_->sendCommand(command_pos, !is_streaming_, command_io);
 }
 
 void FanucClient::writeJointTargetRMI(const Eigen::VectorXd& joint_targets)
@@ -249,126 +212,38 @@ void FanucClient::writeJointTargetRMI(const Eigen::VectorXd& joint_targets)
 Eigen::Ref<const Eigen::VectorXd> FanucClient::readJointAngles()
 {
   AssertIsStreaming(is_streaming_);
-  readStateFromQueue();
 
-  return last_joint_angles_;
-}
+  stream_motion::RobotStatusPacket robot_status;
 
-Eigen::Ref<const Eigen::VectorXd> FanucClient::readJointAnglesRMI()
-{
-  AssertNotStreaming(is_streaming_);
-
-  const auto response = rmi_connection_->readJointAngles(std::nullopt, std::nullopt);
-  last_joint_angles_[0] = response.JointAngle.J1;
-  last_joint_angles_[1] = response.JointAngle.J2;
-  last_joint_angles_[2] = response.JointAngle.J3;
-  last_joint_angles_[3] = response.JointAngle.J4;
-  last_joint_angles_[4] = response.JointAngle.J5;
-  last_joint_angles_[5] = response.JointAngle.J6;
-  last_joint_angles_[6] = response.JointAngle.J7;
-  last_joint_angles_[7] = response.JointAngle.J8;
-  last_joint_angles_[8] = response.JointAngle.J9;
-
-  last_joint_angles_[2] = last_joint_angles_[2] + last_joint_angles_[1];
-
-  return last_joint_angles_;
-}
-
-bool FanucClient::sendIOCommand() const
-{
-  if (gpio_buffer_ == nullptr)
-  {
-    // Nothing to command.
-    return true;
+  // blocks until new UDP packet arrives!
+  if (!stream_motion_->getStatusPacket(robot_status)) {
+    throw std::runtime_error("Fanuc Hardware Interface: Failed to receive status packet in time.");
   }
 
-  return p_queue_impl_->command_io_queue_.try_enqueue(gpio_buffer_->command_buffer());
-}
-
-void FanucClient::streamMotionThread(const Eigen::VectorXd& joint_angles)
-{
-  stream_motion::RobotStatusPacket status;
-  double command_timestamp = 0.0;
-  double last_command_timestamp = 0.0;
-  Eigen::VectorXd command = joint_angles;
-  Eigen::VectorXd last_command = joint_angles;
-  std::array<uint8_t, 256> command_io{};
-  double ts_drift = 0.0;
-  double dev_time = 0.0;
-  double dev_time_prev = 0.0;
-
-  while (is_streaming_)
-  {
-    if (!stream_motion_->getStatusPacket(status))
-    {
-      // Abort stream if we cannot get the status packet
-      is_streaming_ = false;
-    }
-
-    // set estimated time to first command's timestamp
-    if ((dev_time == 0.0) && (p_queue_impl_->command_queue_.size_approx() != 0))
-    {
-      const PQueueImpl::StampedEigen* queue_entry = p_queue_impl_->command_queue_.peek();
-      dev_time = std::get<0>(*queue_entry).count();
-      dev_time_prev = dev_time;
-    }
-    else
-    {
-      // calculate drift
-      double time_error = static_cast<double>(p_queue_impl_->command_queue_.size_approx()) -
-                          static_cast<double>(out_cmd_interp_buff_target_);
-      ts_drift = 0.99 * ts_drift + time_error * 0.000001;
-
-      // push the time forward
-      dev_time_prev = dev_time;
-      dev_time += (getControlPeriod() / 1000.0) + ts_drift;
-    }
-
-    int size_before = p_queue_impl_->command_queue_.size_approx();
-
-    // find the right interval to use.
-    while (p_queue_impl_->command_queue_.size_approx() != 0)
-    {
-      const PQueueImpl::StampedEigen* queue_entry = p_queue_impl_->command_queue_.peek();
-      last_command = command;
-      last_command_timestamp = command_timestamp;
-      command_timestamp = std::get<0>(*queue_entry).count();
-      command = std::get<1>(*queue_entry);
-      if (dev_time == 0.0)
-      {
-        dev_time = command_timestamp;
-        dev_time_prev = command_timestamp;
-      }
-      if (command_timestamp >= dev_time_prev)
-      {
-        break;
-      }
-      p_queue_impl_->command_queue_.pop();
-    }
-
-    // Do interpolation.
-    double alpha;
-    if (command_timestamp - last_command_timestamp < 1e-6)
-    {
-      alpha = 0;
-    }
-    else
-    {
-      alpha = (dev_time_prev - last_command_timestamp) / (command_timestamp - last_command_timestamp);
-    }
-    alpha = std::min(alpha, 1.0);
-    alpha = std::max(alpha, 0.0);
-    for (Eigen::Index i = 0; i < status.joint_angle.size(); ++i)
-    {
-      command_pos[i] = alpha * command[i] + (1.0 - alpha) * last_command[i];
-    }
-
-    // Handle IO commands.
-    while (p_queue_impl_->command_io_queue_.try_dequeue(command_io)) {}
-
-    stream_motion_->sendCommand(command_pos, !is_streaming_, command_io);
-    p_queue_impl_->robot_state_queue_.enqueue(status);
+  for (Eigen::Index i = 0; i < robot_status.joint_angle.size(); ++i) {
+    last_joint_angles_[i] = static_cast<double>(robot_status.joint_angle[i]);
   }
+
+  if (gpio_buffer_ != nullptr) {
+    gpio_buffer_->status_buffer() = robot_status.io_status;
+  }
+
+  robot_status_.in_error = robot_status.robot_status & 0x1;
+  robot_status_.tp_enabled = robot_status.robot_status & 0x2;
+  robot_status_.e_stopped = robot_status.robot_status & 0x4;
+  robot_status_.motion_possible = robot_status.status & 0x1;
+  robot_status_.contact_stop_mode = ToContactStopMode(robot_status.contact_stop_status);
+  robot_status_.safety_scale = robot_status.safety_scale;
+
+  force_sensor_.force_x = robot_status.force_x;
+  force_sensor_.force_y = robot_status.force_y;
+  force_sensor_.force_z = robot_status.force_z;
+  force_sensor_.moment_x = robot_status.moment_x;
+  force_sensor_.moment_y = robot_status.moment_y;
+  force_sensor_.moment_z = robot_status.moment_z;
+  force_sensor_.fs_type = robot_status.fs_type;
+
+  return last_joint_angles_;
 }
 
 void FanucClient::fetchRobotLimits()
@@ -505,31 +380,21 @@ void FanucClient::startRealtimeStream(std::shared_ptr<GPIOBuffer> gpio_buffer)
       }
     }
   }
-  start_time_ = std::chrono::high_resolution_clock::now();
-  p_queue_impl_->robot_state_queue_.enqueue(status);
   is_streaming_ = true;
   last_joint_angles_ = Eigen::VectorXd::Zero(status.joint_angle.size());
+
   for (Eigen::Index i = 0; i < status.joint_angle.size(); ++i)
   {
     last_joint_angles_[i] = static_cast<double>(status.joint_angle[i]);
     command_pos[i] = static_cast<double>(status.joint_angle[i]);
   }
+  stream_motion_->total_commands_sent_++;
   stream_motion_->sendCommand(command_pos, false, {});
-
-  if (rt_thread_.joinable())
-  {
-    rt_thread_.join();
-  }
-  rt_thread_ = std::thread([this] { streamMotionThread(last_joint_angles_); });
 }
 
 void FanucClient::stopRealtimeStream()
 {
   is_streaming_ = false;
-  if (rt_thread_.joinable())
-  {
-    rt_thread_.join();
-  }
 
   // Wait for robot to stop motion
   stream_motion::RobotStatusPacket status;

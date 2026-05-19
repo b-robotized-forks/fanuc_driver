@@ -71,7 +71,6 @@ public:
 
   Eigen::Ref<const Eigen::VectorXd> readJointAnglesRMI();
 
-  bool sendIOCommand() const;
 
   // Throws if it fails to start real-time communication
   void startRealtimeStream(std::shared_ptr<GPIOBuffer> gpio_buffer = nullptr);
@@ -92,16 +91,6 @@ public:
   void setPayloadSchedule(uint8_t payload_schedule) const;
 
   void validateGPIOBuffer(const std::shared_ptr<GPIOBuffer>& gpio_buffer) const;
-
-  void setOutCmdInterpBuffTarget(uint32_t out_cmd_interp_buff_target)
-  {
-    out_cmd_interp_buff_target_ = out_cmd_interp_buff_target;
-  }
-
-  uint32_t getOutCmdInterpBuffTarget() const
-  {
-    return out_cmd_interp_buff_target_;
-  }
 
   void setForceSensorType(uint32_t force_sensor_type)
   {
@@ -158,9 +147,6 @@ private:
   static struct sigaction previous_sigaction_;
 
 private:
-  void readStateFromQueue();
-
-  void streamMotionThread(const Eigen::VectorXd& joint_angles);
 
   /** Grab the limits from the robot.*/
   void fetchRobotLimits();
@@ -168,6 +154,7 @@ private:
   const std::string robot_ip_;
   const uint16_t stream_motion_port_;
   const uint16_t rmi_port_;
+  uint32_t total_commands_sent_ = 0;
 
   // Limits
   Eigen::MatrixXd vel_limits_no_load_ = Eigen::MatrixXd::Zero(9, 20);
@@ -193,21 +180,12 @@ private:
   // IO data only accessed from the non-realitime thread.
   std::shared_ptr<GPIOBuffer> gpio_buffer_;
 
-  // Real time thread data
-  std::thread rt_thread_;
-
   // Manages RMI connection
   std::shared_ptr<rmi::RMIConnectionInterface> rmi_connection_;
   std::atomic<bool> rmi_running_ = false;
 
-  // Output command interpolation buffer target size for stream motion control
-  uint32_t out_cmd_interp_buff_target_;
-
   // Force sensor default type
   uint32_t force_sensor_type_;
-
-  struct PQueueImpl;
-  std::unique_ptr<PQueueImpl> p_queue_impl_;
 };
 
 class RMISingleton

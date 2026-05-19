@@ -10,6 +10,7 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+#include <sys/epoll.h>
 
 #include "sockpp/inet_address.h"
 #include "sockpp/udp_socket.h"
@@ -101,7 +102,27 @@ struct StreamMotionConnection::PSocketImpl
   {
     sock.connect(server_address);
     sock.set_non_blocking(true);
+
+    // epoll setup
+    // https://github.com/fzi-forschungszentrum-informatik/kuka_rsi_driver/blob/main/kuka_rsi_driver/src/udp_server.cpp
+
+    epoll_fd = epoll_create1(0);
+    if (epoll_fd == -1) {
+      throw std::runtime_error("Failed to create epoll file descriptor.");
+    }
+
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = sock.handle();
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sock.handle(), &ev) == -1) {
+      throw std::runtime_error("Failed to add socket to epoll.");
+    }
+
     std::cout << "Created UDP socket at: " << sock.address() << std::endl;
+  }
+
+  ~PSocketImpl() {
+    if (epoll_fd >= 0) close(epoll_fd);
   }
 
   template <typename T>
@@ -121,26 +142,30 @@ struct StreamMotionConnection::PSocketImpl
   template <typename T>
   bool receive(T& value)
   {
-    // Clear the status packet before receiving new data
     value = T();
 
-    void* buf = &value;
-    const auto start_time = std::chrono::steady_clock::now();
-    while (true)
-    {
-      constexpr size_t kPacketNumBytes = sizeof(T);
-      sockpp::result<size_t> res = sock.recv(buf, kPacketNumBytes);
-      if (res != kPacketNumBytes &&
-          std::chrono::steady_clock::now() - start_time > std::chrono::duration<double>(timeout))
-      {
-        std::cerr << "Timeout while reading from UDP socket." << std::endl;
-        return false;
-      }
-      if (res == kPacketNumBytes)
-      {
-        break;
-      }
-      std::this_thread::sleep_for(std::chrono::microseconds(100));
+    // signle epoll event on the stack
+    struct epoll_event events[1];
+    int timeout_ms = static_cast<int>(timeout * 1000.0);
+
+    // FULLY BLOCKING HERE!
+    int nfds = epoll_wait(epoll_fd, events, 1, timeout_ms);
+
+    if (nfds == -1) {
+      if (errno == EINTR) return false;
+      throw std::runtime_error("epoll_wait failed");
+    }
+    if (nfds == 0) {
+      std::cerr << "Timeout while waiting for UDP packet." << std::endl;
+      return false;
+    }
+
+    constexpr size_t kPacketNumBytes = sizeof(T);
+    sockpp::result<size_t> res = sock.recv(&value, kPacketNumBytes);
+    if (res != kPacketNumBytes) {
+      std::cerr << "Incomplete packet received. Expected " << kPacketNumBytes
+              << " but got " << res.value() << std::endl;
+      return false;
     }
 
     return true;
@@ -149,6 +174,7 @@ struct StreamMotionConnection::PSocketImpl
   sockpp::udp_socket sock;
   sockpp::inet_address server_address;
   double timeout;
+  int epoll_fd = -1;
 };
 
 StreamMotionConnection::~StreamMotionConnection() = default;
@@ -384,6 +410,7 @@ void StreamMotionConnection::sendCommand(const std::array<double, kMaxAxisNumber
 
 bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
 {
+  std::cerr << "total_cmd, cmd_no/stat_no: "<< total_commands_sent_ << " | "<< command_sequence_no_ << "/" << status_sequence_no_ << std::endl;
   if (command_sequence_no_ == status_sequence_no_)
   {
     status = RobotStatusPacket{};
@@ -394,6 +421,7 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
     if (version_no_ <= 3)
     {
       V3RobotStatusPacket dummy_status{};
+      // This blocks!
       received = socket_impl_->receive(dummy_status);
       if (received)
       {
@@ -453,7 +481,6 @@ bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
   }
 
   command_sequence_no_++;
-
   return true;
 }
 
