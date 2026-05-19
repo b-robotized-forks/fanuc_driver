@@ -384,6 +384,7 @@ void StreamMotionConnection::sendCommand(const std::array<double, kMaxAxisNumber
 
 bool StreamMotionConnection::getStatusPacket(RobotStatusPacket& status)
 {
+  std::cout << "cmd/status sequence number: "<< command_sequence_no_ << "/" << status_sequence_no_ << std::endl;
   if (command_sequence_no_ == status_sequence_no_)
   {
     status = RobotStatusPacket{};
