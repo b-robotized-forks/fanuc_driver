@@ -385,8 +385,16 @@ hardware_interface::CallbackReturn FanucHardwareInterface::on_activate(const rcl
 {
   RCLCPP_INFO_STREAM(rclcpp::get_logger(kFRHWInterface), "activating hardware interface");
 
-  fanuc_client_->startRealtimeStream(gpio_buffer_);
+  fanuc_client_->startRealtimeStream(gpio_buffer_); 
+  // IDEA @Denis:
+  // This calls getStatusPacket, which increments the command_sequence_no_,
+  // but after this we are back in read, calling getStatusPacket again.
+
+  // This means, on activation, we're skipping one command number in the sequence. Maybe this is the problem?
   joint_targets_degrees_ = fanuc_client_->readJointAngles();
+  fanuc_client_->writeJointTarget(joint_targets_degrees_); // now we respond with a command.
+
+  // In essence, we're trying to avoid having a read() without returning a write().
   joint_targets_.array() = M_PI / 180.0 * joint_targets_degrees_.array();
 
   return CallbackReturn::SUCCESS;
