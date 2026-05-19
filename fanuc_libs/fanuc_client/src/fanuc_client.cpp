@@ -367,6 +367,9 @@ void FanucClient::streamMotionThread(const Eigen::VectorXd& joint_angles)
     // Handle IO commands.
     while (p_queue_impl_->command_io_queue_.try_dequeue(command_io)) {}
 
+    // maybe total number of command we sent is different that the sequence number?
+    std::cout << "total cmds sent: "<< total_commands_sent_ << std::endl;
+    total_commands_sent_++;
     stream_motion_->sendCommand(command_pos, !is_streaming_, command_io);
     p_queue_impl_->robot_state_queue_.enqueue(status);
   }
@@ -515,6 +518,9 @@ void FanucClient::startRealtimeStream(std::shared_ptr<GPIOBuffer> gpio_buffer)
     last_joint_angles_[i] = static_cast<double>(status.joint_angle[i]);
     command_pos[i] = static_cast<double>(status.joint_angle[i]);
   }
+  // maybe total number of command we sent is different that the sequence number?
+  std::cout << "total cmds sent: "<< total_commands_sent_ << std::endl;
+  total_commands_sent_++;
   stream_motion_->sendCommand(command_pos, false, {});
 
   if (rt_thread_.joinable())
