@@ -447,6 +447,13 @@ std::vector<hardware_interface::StateInterface> FanucHardwareInterface::export_s
   state_interfaces.emplace_back("ft_sensor", "torque.y", &force_sensor_.moment_y);
   state_interfaces.emplace_back("ft_sensor", "torque.z", &force_sensor_.moment_z);
 
+  // telemetry fields to monitor connection
+  state_interfaces.emplace_back("telemetry", "command_timestamp", &telemetry_state_.command_timestamp);
+  state_interfaces.emplace_back("telemetry", "queue_size", &telemetry_state_.queue_size);
+  state_interfaces.emplace_back("telemetry", "ts_drift", &telemetry_state_.ts_drift);
+  state_interfaces.emplace_back("telemetry", "dev_time", &telemetry_state_.dev_time);
+  state_interfaces.emplace_back("telemetry", "packet_arrival_delta_ms", &telemetry_state_.packet_arrival_delta_ms);
+
   return state_interfaces;
 }
 
@@ -534,6 +541,8 @@ hardware_interface::return_type FanucHardwareInterface::read(const rclcpp::Time&
     force_sensor_.moment_y = static_cast<double>(fanuc_client_->force_sensor().moment_y);
     force_sensor_.moment_z = static_cast<double>(fanuc_client_->force_sensor().moment_z);
     force_sensor_.fs_type = static_cast<double>(fanuc_client_->force_sensor().fs_type);
+
+    fanuc_client_->getLatestTelemetry(telemetry_state_);
   }
   catch (const std::exception& e)
   {

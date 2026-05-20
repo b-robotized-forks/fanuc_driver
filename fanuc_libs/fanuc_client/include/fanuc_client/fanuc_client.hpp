@@ -29,6 +29,15 @@ enum class ContactStopMode
   ESCP = 4,
 };
 
+struct TelemetryPoint
+{
+  double command_timestamp{0.0};
+  double queue_size{0.0};
+  double ts_drift{0.0};
+  double dev_time{0.0};
+  double packet_arrival_delta_ms{0.0};
+};
+
 struct RobotStatus
 {
   bool in_error;
@@ -137,6 +146,8 @@ public:
   {
     return client_version_;
   }
+
+  bool getLatestTelemetry(TelemetryPoint& telemetry_out);
 
 private:
   /** Setup signal handler for SIGINT */

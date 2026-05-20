@@ -77,6 +77,7 @@ struct FanucClient::PQueueImpl
   moodycamel::BlockingReaderWriterQueue<StampedEigen> command_queue_;
   moodycamel::BlockingReaderWriterQueue<std::array<uint8_t, 256>> command_io_queue_;
   moodycamel::BlockingReaderWriterQueue<stream_motion::RobotStatusPacket> robot_state_queue_;
+  moodycamel::ReaderWriterQueue<TelemetryPoint> telemetry_queue_{256};
 };
 
 FanucClient::FanucClient(std::string robot_ip, const uint16_t stream_motion_port, const uint16_t rmi_port,
@@ -169,6 +170,19 @@ FanucClient::~FanucClient()
   }
 
   restoreSignalHandler();
+}
+
+bool FanucClient::getLatestTelemetry(TelemetryPoint& telemetry_out)
+{
+  TelemetryPoint tp_temp;
+  bool updated = false;
+  // drain the queue completely
+  while (p_queue_impl_->telemetry_queue_.try_dequeue(tp_temp))
+  {
+    telemetry_out = tp_temp;
+    updated = true;
+  }
+  return updated;
 }
 
 void FanucClient::readStateFromQueue()
@@ -296,6 +310,7 @@ void FanucClient::streamMotionThread(const Eigen::VectorXd& joint_angles)
   double ts_drift = 0.0;
   double dev_time = 0.0;
   double dev_time_prev = 0.0;
+  auto last_packet_time = std::chrono::steady_clock::now();
 
   while (is_streaming_)
   {
@@ -304,6 +319,10 @@ void FanucClient::streamMotionThread(const Eigen::VectorXd& joint_angles)
       // Abort stream if we cannot get the status packet
       is_streaming_ = false;
     }
+
+    auto now = std::chrono::steady_clock::now();
+    double packet_delta = std::chrono::duration<double, std::milli>(now - last_packet_time).count();
+    last_packet_time = now;
 
     // set estimated time to first command's timestamp
     if ((dev_time == 0.0) && (p_queue_impl_->command_queue_.size_approx() != 0))
@@ -368,6 +387,15 @@ void FanucClient::streamMotionThread(const Eigen::VectorXd& joint_angles)
 
     stream_motion_->sendCommand(command_pos, !is_streaming_, command_io);
     p_queue_impl_->robot_state_queue_.enqueue(status);
+
+    TelemetryPoint tp;
+    tp.command_timestamp = command_timestamp;
+    tp.queue_size = static_cast<double>(size_before);
+    tp.ts_drift = ts_drift;
+    tp.dev_time = dev_time;
+    tp.packet_arrival_delta_ms = packet_delta;
+
+    p_queue_impl_->telemetry_queue_.try_enqueue(tp);
   }
 }
 

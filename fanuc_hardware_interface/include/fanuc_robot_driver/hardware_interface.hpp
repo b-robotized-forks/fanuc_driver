@@ -104,6 +104,7 @@ private:
 
   std::vector<std::unique_ptr<IOCommandInterface>> io_commands_;
   std::vector<std::unique_ptr<IOStateInterface>> io_state_;
+  fanuc_client::TelemetryPoint telemetry_state_;
 };
 
 }  // namespace fanuc_robot_driver
