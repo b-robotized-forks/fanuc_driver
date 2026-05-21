@@ -283,7 +283,8 @@ Eigen::Ref<const Eigen::VectorXd> FanucClient::readJointAnglesRMI()
   last_joint_angles_[6] = response.JointAngle.J7;
   last_joint_angles_[7] = response.JointAngle.J8;
   last_joint_angles_[8] = response.JointAngle.J9;
-
+  
+  // NB: why is this here? DO we need this in regular streaming joint angle reading?
   last_joint_angles_[2] = last_joint_angles_[2] + last_joint_angles_[1];
 
   return last_joint_angles_;
