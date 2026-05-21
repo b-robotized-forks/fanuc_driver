@@ -149,6 +149,12 @@ public:
 
   bool getLatestTelemetry(TelemetryPoint& telemetry_out);
 
+  void setThreadPriority(int priority) { thread_priority_ = priority; }
+  int getThreadPriority() const { return thread_priority_; }
+
+  void setCpuAffinity(int core) { cpu_affinity_ = core; }
+  int getCpuAffinity() const { return cpu_affinity_; }
+
 private:
   /** Setup signal handler for SIGINT */
   void setupSignalHandler();
@@ -169,6 +175,9 @@ private:
   static struct sigaction previous_sigaction_;
 
 private:
+  int thread_priority_ = 50;
+  int cpu_affinity_ = -1; // -1 means do not set affinity
+
   void readStateFromQueue();
 
   void streamMotionThread(const Eigen::VectorXd& joint_angles);

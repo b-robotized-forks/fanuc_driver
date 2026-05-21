@@ -8,6 +8,10 @@ project(fanuc_libs VERSION 1.0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 
+find_package(ament_cmake REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(realtime_tools REQUIRED)
+
 # Build the sockpp library
 include(FetchContent)
 FetchContent_Declare(
@@ -76,48 +80,24 @@ if (BUILD_EXAMPLES)
   add_subdirectory(examples)
 endif ()
 
-# Create cmake config and version files
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/fanuc_libsConfigVersion.cmake
-    VERSION
-    ${PROJECT_VERSION}
-    COMPATIBILITY AnyNewerVersion
-    ARCH_INDEPENDENT
-)
-configure_package_config_file(fanuc_libsConfig.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/fanuc_libsConfig.cmake
-    INSTALL_DESTINATION
-    ${CMAKE_INSTALL_LIBDIR}/cmake/fanuc_libs/
+install(TARGETS stream_motion rmi fanuc_client gpio_config
+    EXPORT fanuc_libsTargets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
 )
 
-# --- Install ---
-include(GNUInstallDirs)
-install(TARGETS stream_motion rmi fanuc_client gpio_config
-    EXPORT fanuc_libsExports
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
-install(EXPORT fanuc_libsExports
-    FILE
-    fanuc_libsTargets.cmake
-    NAMESPACE
-    fanuc_libs::
-    DESTINATION
-    ${CMAKE_INSTALL_LIBDIR}/cmake/fanuc_libs
-)
 install(DIRECTORY
     rmi/include/
     stream_motion/include/
     fanuc_client/include/
     gpio_config/include/
-    DESTINATION
-    ${CMAKE_INSTALL_INCLUDEDIR}
+    DESTINATION include
 )
-install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/fanuc_libsConfig.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/fanuc_libsConfigVersion.cmake
-    DESTINATION
-    ${CMAKE_INSTALL_LIBDIR}/cmake/fanuc_libs
-)
+
+
+ament_export_targets(fanuc_libsTargets HAS_LIBRARY_TARGET)
+ament_export_dependencies(Eigen3 realtime_tools)
+
+
+ament_package()

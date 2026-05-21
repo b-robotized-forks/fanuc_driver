@@ -336,6 +336,10 @@ FanucHardwareInterface::on_configure(const rclcpp_lifecycle::State& /*previous_s
 {
   RCLCPP_INFO_STREAM(rclcpp::get_logger(kFRHWInterface), "Preparing FANUC ROS2 HW interface");
   ip_address_ = info_.hardware_parameters["robot_ip"];
+
+  int thread_priority = 70;
+  int cpu_affinity = -1;
+  
   try
   {
     rmi_port_ = StringToInt("rmi_port", info_.hardware_parameters["rmi_port"]);
@@ -344,6 +348,13 @@ FanucHardwareInterface::on_configure(const rclcpp_lifecycle::State& /*previous_s
     out_cmd_interp_buff_target_ =
         StringToInt("out_cmd_interp_buff_target", info_.hardware_parameters["out_cmd_interp_buff_target"]);
     force_sensor_type_ = StringToInt("force_sensor_type", info_.hardware_parameters["force_sensor_type"]);
+
+    if (info_.hardware_parameters.count("thread_priority")) {
+      thread_priority = StringToInt("thread_priority", info_.hardware_parameters["thread_priority"]);
+    }
+    if (info_.hardware_parameters.count("cpu_affinity")) {
+      cpu_affinity = StringToInt("cpu_affinity", info_.hardware_parameters["cpu_affinity"]);
+    }
   }
   catch (const std::exception& e)
   {
@@ -361,6 +372,8 @@ FanucHardwareInterface::on_configure(const rclcpp_lifecycle::State& /*previous_s
     {
       fanuc_client_.reset();
       fanuc_client_ = std::make_unique<fanuc_client::FanucClient>(ip_address_, stream_motion_port_, rmi_port_);
+      fanuc_client_->setThreadPriority(thread_priority);
+      fanuc_client_->setCpuAffinity(cpu_affinity);
       fanuc_client_->setOutCmdInterpBuffTarget(out_cmd_interp_buff_target_);
       fanuc_client_->setForceSensorType(force_sensor_type_);
       fanuc_client_->startRMI();

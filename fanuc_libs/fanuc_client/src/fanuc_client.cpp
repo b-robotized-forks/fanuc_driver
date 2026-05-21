@@ -15,6 +15,7 @@
 #include "fanuc_client/gpio_buffer.hpp"
 #include "readerwriterqueue.h"
 #include "stream_motion/packets.hpp"
+#include "realtime_tools/realtime_helpers.hpp"
 
 namespace fanuc_client
 {
@@ -548,7 +549,39 @@ void FanucClient::startRealtimeStream(std::shared_ptr<GPIOBuffer> gpio_buffer)
   {
     rt_thread_.join();
   }
-  rt_thread_ = std::thread([this] { streamMotionThread(last_joint_angles_); });
+
+  rt_thread_ = std::thread([this] {
+
+    if (cpu_affinity_ >= 0)
+    {
+      const auto affinity_result = realtime_tools::set_current_thread_affinity(cpu_affinity_);
+      if (!affinity_result.first)
+      {
+        std::cerr << "Warning: Unable to set CPU affinity to core " << cpu_affinity_ 
+                  << ": " << affinity_result.second << std::endl;
+      }
+      else
+      {
+        std::cout << "Successfully set CPU affinity to core " << cpu_affinity_ << "." << std::endl;
+      }
+    }
+
+
+    if (!realtime_tools::configure_sched_fifo(thread_priority_))
+    {
+      std::cerr << "Warning: Could not enable FIFO RT scheduling policy with priority " 
+                << thread_priority_ << ". Check your system's realtime privileges. "
+                << "Thread will run with standard priority." << std::endl;
+    }
+    else
+    {
+      std::cout << "Successfully set up FIFO RT scheduling policy with priority " 
+                << thread_priority_ << "." << std::endl;
+    }
+
+    // 3. Execute the actual stream motion loop
+    streamMotionThread(last_joint_angles_);
+  });
 }
 
 void FanucClient::stopRealtimeStream()
