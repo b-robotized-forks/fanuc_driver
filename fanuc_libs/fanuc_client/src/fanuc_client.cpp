@@ -235,7 +235,7 @@ void FanucClient::writeJointTarget(const Eigen::VectorXd& joint_targets)
   {
     throw std::invalid_argument("Joint targets size does not match the size of last joint angles.");
   }
-  auto cur_time_from_start = std::chrono::high_resolution_clock::now() - start_time_;
+  auto cur_time_from_start = std::chrono::steady_clock::now() - start_time_;
   p_queue_impl_->command_queue_.enqueue({ cur_time_from_start, last_joint_angles_cmd_ });
 }
 
@@ -535,7 +535,7 @@ void FanucClient::startRealtimeStream(std::shared_ptr<GPIOBuffer> gpio_buffer)
       }
     }
   }
-  start_time_ = std::chrono::high_resolution_clock::now();
+  start_time_ = std::chrono::steady_clock::now();
   p_queue_impl_->robot_state_queue_.enqueue(status);
   is_streaming_ = true;
   last_joint_angles_ = Eigen::VectorXd::Zero(status.joint_angle.size());
