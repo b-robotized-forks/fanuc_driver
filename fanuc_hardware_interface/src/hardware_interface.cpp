@@ -328,6 +328,54 @@ hardware_interface::CallbackReturn FanucHardwareInterface::on_init(const hardwar
     gpio_buffer_ = std::make_shared<fanuc_client::GPIOBuffer>(std::move(interfaces.buffer));
   }
 
+  io_state_names_.reserve(io_state_.size());
+  for (const auto& io_state : io_state_)
+  {
+    io_state_names_.push_back(io_state->name() + "/" + std::to_string(io_state->index));
+  }
+  io_command_names_.reserve(io_commands_.size());
+  for (const auto& io_command : io_commands_)
+  {
+    io_command_names_.push_back(io_command->name() + "/" + std::to_string(io_command->index));
+  }
+
+  joint_position_state_names_.resize(info_.joints.size());
+  joint_velocity_state_names_.resize(info_.joints.size());
+  joint_position_command_names_.resize(info_.joints.size());
+  for (size_t i = 0; i < info_.joints.size(); ++i)
+  {
+    joint_position_state_names_[i] = info_.joints[i].name + "/" + hardware_interface::HW_IF_POSITION;
+    joint_velocity_state_names_[i] = info_.joints[i].name + "/" + hardware_interface::HW_IF_VELOCITY;
+    joint_position_command_names_[i] = info_.joints[i].name + "/" + hardware_interface::HW_IF_POSITION;
+  }
+
+  // is_connected is pushed separately at the top of read(), since it must be pushed even on the
+  // early-return-on-disconnected path this list is only used from the try block below.
+  fixed_state_interfaces_ = {
+    { std::string(kRobotStatusInterfaceName) + "/" + kStatusInErrorType, &robot_status_.in_error },
+    { std::string(kRobotStatusInterfaceName) + "/" + kStatusTPEnabledType, &robot_status_.tp_enabled },
+    { std::string(kRobotStatusInterfaceName) + "/" + kStatusEStoppedType, &robot_status_.e_stopped },
+    { std::string(kRobotStatusInterfaceName) + "/" + kStatusMotionPossibleType, &robot_status_.motion_possible },
+    { std::string(kRobotStatusInterfaceName) + "/" + kStatusContactStopModeType,
+      &robot_status_.contact_stop_mode },
+    { std::string(kRobotStatusInterfaceName) + "/" + kStatusCollaborativeSpeedScalingType,
+      &robot_status_.collaborative_speed_scaling },
+    { std::string(kForceInterfaceName) + "/" + kForceXType, &force_sensor_.force_x },
+    { std::string(kForceInterfaceName) + "/" + kForceYType, &force_sensor_.force_y },
+    { std::string(kForceInterfaceName) + "/" + kForceZType, &force_sensor_.force_z },
+    { std::string(kForceInterfaceName) + "/" + kMomentXType, &force_sensor_.moment_x },
+    { std::string(kForceInterfaceName) + "/" + kMomentYType, &force_sensor_.moment_y },
+    { std::string(kForceInterfaceName) + "/" + kMomentZType, &force_sensor_.moment_z },
+    { std::string(kForceInterfaceName) + "/" + kForceSensorType, &force_sensor_.fs_type },
+    // For force_torque_sensor_broadcaster (geometry_msgs/WrenchStamped)
+    { "ft_sensor/force.x", &force_sensor_.force_x },
+    { "ft_sensor/force.y", &force_sensor_.force_y },
+    { "ft_sensor/force.z", &force_sensor_.force_z },
+    { "ft_sensor/torque.x", &force_sensor_.moment_x },
+    { "ft_sensor/torque.y", &force_sensor_.moment_y },
+    { "ft_sensor/torque.z", &force_sensor_.moment_z },
+  };
+
   return hardware_interface::CallbackReturn::SUCCESS;
 }
 
@@ -406,71 +454,72 @@ hardware_interface::CallbackReturn FanucHardwareInterface::on_cleanup(const rclc
   return CallbackReturn::SUCCESS;
 }
 
-std::vector<hardware_interface::StateInterface> FanucHardwareInterface::export_state_interfaces()
+namespace
 {
-  std::vector<hardware_interface::StateInterface> state_interfaces;
-  state_interfaces.reserve(2 * info_.joints.size());
-  for (size_t i = 0; i < info_.joints.size(); ++i)
-  {
-    state_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_POSITION, &fr_joint_pos_[i]);
-    state_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &fr_joint_vel_[i]);
-  }
+hardware_interface::InterfaceDescription MakeUnlistedInterface(const std::string& prefix, const std::string& name)
+{
+  hardware_interface::InterfaceInfo info{};
+  info.name = name;
+  info.initial_value = "0";
+  return hardware_interface::InterfaceDescription(prefix, info);
+}
+}  // namespace
+
+std::vector<hardware_interface::InterfaceDescription>
+FanucHardwareInterface::export_unlisted_state_interface_descriptions()
+{
+  std::vector<hardware_interface::InterfaceDescription> descriptions;
 
   for (const auto& io_state : io_state_)
   {
-    state_interfaces.emplace_back(io_state->name(), std::to_string(io_state->index), &io_state->value);
+    descriptions.push_back(MakeUnlistedInterface(io_state->name(), std::to_string(io_state->index)));
   }
 
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusInErrorType, &robot_status_.in_error);
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusTPEnabledType, &robot_status_.tp_enabled);
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusEStoppedType, &robot_status_.e_stopped);
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusMotionPossibleType, &robot_status_.motion_possible);
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusContactStopModeType, &robot_status_.contact_stop_mode);
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusCollaborativeSpeedScalingType,
-                                &robot_status_.collaborative_speed_scaling);
+  descriptions.push_back(MakeUnlistedInterface(kRobotStatusInterfaceName, kStatusInErrorType));
+  descriptions.push_back(MakeUnlistedInterface(kRobotStatusInterfaceName, kStatusTPEnabledType));
+  descriptions.push_back(MakeUnlistedInterface(kRobotStatusInterfaceName, kStatusEStoppedType));
+  descriptions.push_back(MakeUnlistedInterface(kRobotStatusInterfaceName, kStatusMotionPossibleType));
+  descriptions.push_back(MakeUnlistedInterface(kRobotStatusInterfaceName, kStatusContactStopModeType));
+  descriptions.push_back(
+      MakeUnlistedInterface(kRobotStatusInterfaceName, kStatusCollaborativeSpeedScalingType));
 
-  state_interfaces.emplace_back(kConnectionStatusName, kIsConnectedType, &robot_status_.is_connected);
+  descriptions.push_back(MakeUnlistedInterface(kConnectionStatusName, kIsConnectedType));
 
-  state_interfaces.emplace_back(kForceInterfaceName, kForceXType, &force_sensor_.force_x);
-  state_interfaces.emplace_back(kForceInterfaceName, kForceYType, &force_sensor_.force_y);
-  state_interfaces.emplace_back(kForceInterfaceName, kForceZType, &force_sensor_.force_z);
-  state_interfaces.emplace_back(kForceInterfaceName, kMomentXType, &force_sensor_.moment_x);
-  state_interfaces.emplace_back(kForceInterfaceName, kMomentYType, &force_sensor_.moment_y);
-  state_interfaces.emplace_back(kForceInterfaceName, kMomentZType, &force_sensor_.moment_z);
-  state_interfaces.emplace_back(kForceInterfaceName, kForceSensorType, &force_sensor_.fs_type);
+  descriptions.push_back(MakeUnlistedInterface(kForceInterfaceName, kForceXType));
+  descriptions.push_back(MakeUnlistedInterface(kForceInterfaceName, kForceYType));
+  descriptions.push_back(MakeUnlistedInterface(kForceInterfaceName, kForceZType));
+  descriptions.push_back(MakeUnlistedInterface(kForceInterfaceName, kMomentXType));
+  descriptions.push_back(MakeUnlistedInterface(kForceInterfaceName, kMomentYType));
+  descriptions.push_back(MakeUnlistedInterface(kForceInterfaceName, kMomentZType));
+  descriptions.push_back(MakeUnlistedInterface(kForceInterfaceName, kForceSensorType));
 
   // For force_torque_sensor_broadcaster (geometry_msgs/WrenchStamped)
-  state_interfaces.emplace_back("ft_sensor", "force.x", &force_sensor_.force_x);
-  state_interfaces.emplace_back("ft_sensor", "force.y", &force_sensor_.force_y);
-  state_interfaces.emplace_back("ft_sensor", "force.z", &force_sensor_.force_z);
-  state_interfaces.emplace_back("ft_sensor", "torque.x", &force_sensor_.moment_x);
-  state_interfaces.emplace_back("ft_sensor", "torque.y", &force_sensor_.moment_y);
-  state_interfaces.emplace_back("ft_sensor", "torque.z", &force_sensor_.moment_z);
+  descriptions.push_back(MakeUnlistedInterface("ft_sensor", "force.x"));
+  descriptions.push_back(MakeUnlistedInterface("ft_sensor", "force.y"));
+  descriptions.push_back(MakeUnlistedInterface("ft_sensor", "force.z"));
+  descriptions.push_back(MakeUnlistedInterface("ft_sensor", "torque.x"));
+  descriptions.push_back(MakeUnlistedInterface("ft_sensor", "torque.y"));
+  descriptions.push_back(MakeUnlistedInterface("ft_sensor", "torque.z"));
 
-  return state_interfaces;
+  return descriptions;
 }
 
-std::vector<hardware_interface::CommandInterface> FanucHardwareInterface::export_command_interfaces()
+std::vector<hardware_interface::InterfaceDescription>
+FanucHardwareInterface::export_unlisted_command_interface_descriptions()
 {
-  std::vector<hardware_interface::CommandInterface> command_interfaces;
-  command_interfaces.reserve(info_.joints.size());
-  for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(info_.joints.size()); ++i)
-  {
-    command_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_POSITION, &joint_targets_[i]);
-  }
-
+  std::vector<hardware_interface::InterfaceDescription> descriptions;
   for (const auto& io_command : io_commands_)
   {
-    command_interfaces.emplace_back(io_command->name(), std::to_string(io_command->index), &io_command->value);
+    descriptions.push_back(MakeUnlistedInterface(io_command->name(), std::to_string(io_command->index)));
   }
-
-  return command_interfaces;
+  return descriptions;
 }
 
 hardware_interface::return_type FanucHardwareInterface::read(const rclcpp::Time& /*time*/,
                                                              const rclcpp::Duration& period)
 {
   robot_status_.is_connected = fanuc_client_ != nullptr && fanuc_client_->isStreaming();
+  set_state(std::string(kConnectionStatusName) + "/" + kIsConnectedType, robot_status_.is_connected);
   if (!robot_status_.is_connected)
   {
     if (fanuc_client_ != nullptr)
@@ -514,10 +563,16 @@ hardware_interface::return_type FanucHardwareInterface::read(const rclcpp::Time&
       const double dt = static_cast<double>(fanuc_client_->getControlPeriod()) / 1000.0;
       fr_joint_vel_ = (fr_joint_pos_ - fr_prev_joint_pos_) / dt;
     }
-
-    for (const auto& io_state : io_state_)
+    for (size_t i = 0; i < joint_position_state_names_.size(); ++i)
     {
-      io_state->updateValue();
+      set_state(joint_position_state_names_[i], fr_joint_pos_[i]);
+      set_state(joint_velocity_state_names_[i], fr_joint_vel_[i]);
+    }
+
+    for (size_t i = 0; i < io_state_.size(); ++i)
+    {
+      io_state_[i]->updateValue();
+      set_state(io_state_names_[i], io_state_[i]->value);
     }
 
     robot_status_.in_error = fanuc_client_->robot_status().in_error;
@@ -534,6 +589,11 @@ hardware_interface::return_type FanucHardwareInterface::read(const rclcpp::Time&
     force_sensor_.moment_y = static_cast<double>(fanuc_client_->force_sensor().moment_y);
     force_sensor_.moment_z = static_cast<double>(fanuc_client_->force_sensor().moment_z);
     force_sensor_.fs_type = static_cast<double>(fanuc_client_->force_sensor().fs_type);
+
+    for (const auto& [name, value_ptr] : fixed_state_interfaces_)
+    {
+      set_state(name, *value_ptr);
+    }
   }
   catch (const std::exception& e)
   {
@@ -551,6 +611,15 @@ hardware_interface::return_type FanucHardwareInterface::read(const rclcpp::Time&
 
 hardware_interface::return_type FanucHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
+  for (size_t i = 0; i < joint_position_command_names_.size(); ++i)
+  {
+    joint_targets_[i] = get_command<double>(joint_position_command_names_[i]);
+  }
+  for (size_t i = 0; i < io_commands_.size(); ++i)
+  {
+    io_commands_[i]->value = get_command<double>(io_command_names_[i]);
+  }
+
   robot_status_.is_connected = fanuc_client_ != nullptr && fanuc_client_->isStreaming();
   if (!robot_status_.is_connected)
   {
