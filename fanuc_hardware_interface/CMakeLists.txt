@@ -57,7 +57,10 @@ target_include_directories(fanuc_hardware_interface_constants INTERFACE
 
 
 if(BUILD_TESTING)
-  #  ...
+  find_package(ament_cmake_gmock REQUIRED)
+  ament_add_gmock(test_hardware_interface_exports test/test_hardware_interface_exports.cpp)
+  target_link_libraries(test_hardware_interface_exports fanuc_robot_driver)
+  ament_target_dependencies(test_hardware_interface_exports hardware_interface)
 endif()
 
 install(

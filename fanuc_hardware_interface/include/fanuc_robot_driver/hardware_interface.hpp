@@ -6,11 +6,13 @@
 #pragma once
 
 #include <atomic>
+#include <string>
+#include <utility>
+#include <vector>
 #include "fanuc_client/fanuc_client.hpp"
 #include "fanuc_client/gpio_buffer.hpp"
 #include "fanuc_robot_driver/constants.hpp"
 #include "gpio_config/gpio_config.hpp"
-#include "hardware_interface/handle.hpp"
 #include "hardware_interface/hardware_info.hpp"
 #include "hardware_interface/system_interface.hpp"
 #include "hardware_interface/types/hardware_interface_return_values.hpp"
@@ -45,9 +47,16 @@ public:
 
   hardware_interface::CallbackReturn on_shutdown(const rclcpp_lifecycle::State& previous_state) override;
 
-  std::vector<hardware_interface::StateInterface> export_state_interfaces() final;
+  // The joint position/velocity state and position command interfaces are declared in the URDF
+  // and already picked up by the default on_export_state_interfaces()/
+  // on_export_command_interfaces(). Everything else - the GPIO interfaces (dynamically named
+  // from a runtime-parsed config file, not the URDF), robot status, connection status, force
+  // sensor and the RMI command - is not tied to a URDF joint and needs explicit declaration here.
+  std::vector<hardware_interface::InterfaceDescription> export_unlisted_state_interface_descriptions()
+      final;
 
-  std::vector<hardware_interface::CommandInterface> export_command_interfaces() final;
+  std::vector<hardware_interface::InterfaceDescription>
+  export_unlisted_command_interface_descriptions() final;
 
   hardware_interface::return_type prepare_command_mode_switch(const std::vector<std::string>& start_interfaces,
                                                               const std::vector<std::string>& stop_interfaces) override;
@@ -125,6 +134,20 @@ private:
   std::vector<std::unique_ptr<IOStateInterface>> io_state_;
 
   double dummy_rmi_command_;
+
+  // Interface names, built once in on_init() (matching kassow_kord_hardware_interface's
+  // convention) instead of concatenating "<prefix>/<interface>" fresh on every read()/write()
+  // cycle. set_state()/get_command() still do a name lookup per call - only the string-building
+  // is cached, not the resolved handle.
+  std::vector<std::string> joint_position_state_names_;
+  std::vector<std::string> joint_velocity_state_names_;
+  std::vector<std::string> joint_position_command_names_;
+  std::vector<std::string> io_state_names_;
+  std::vector<std::string> io_command_names_;
+  // Fixed-name state interfaces (robot status, connection status, force sensor) that are not
+  // tied to a joint or the GPIO config: cached name plus a pointer to the source value, so
+  // read() can push all of them in a single loop.
+  std::vector<std::pair<std::string, double*>> fixed_state_interfaces_;
 };
 
 }  // namespace fanuc_robot_driver
