@@ -299,13 +299,13 @@ FanucHardwareInterface::FanucHardwareInterface()
 
 FanucHardwareInterface::~FanucHardwareInterface() = default;
 
-hardware_interface::CallbackReturn FanucHardwareInterface::on_init(const hardware_interface::HardwareInfo& info)
+hardware_interface::CallbackReturn
+FanucHardwareInterface::on_init(const hardware_interface::HardwareComponentInterfaceParams& params)
 {
-  if (SystemInterface::on_init(info) != CallbackReturn::SUCCESS)
+  if (SystemInterface::on_init(params) != CallbackReturn::SUCCESS)
   {
     return CallbackReturn::ERROR;
   }
-  info_ = info;
 
   // Parse and configure cyclic GPIO from the yaml config.
   const auto config_path_it = info_.hardware_parameters.find("gpio_configuration");
@@ -329,6 +329,8 @@ hardware_interface::CallbackReturn FanucHardwareInterface::on_init(const hardwar
     io_state_ = std::move(interfaces.states);
     gpio_buffer_ = std::make_shared<fanuc_client::GPIOBuffer>(std::move(interfaces.buffer));
   }
+
+  setInterfaceValues();
 
   return hardware_interface::CallbackReturn::SUCCESS;
 }
@@ -410,6 +412,7 @@ hardware_interface::CallbackReturn FanucHardwareInterface::on_activate(const rcl
   fanuc_client_->startRealtimeStream(gpio_buffer_);
   joint_targets_degrees_ = fanuc_client_->readJointAngles();
   joint_targets_.array() = M_PI / 180.0 * joint_targets_degrees_.array();
+  writeCommands();
 
   hw_active_.store(true);
 
@@ -431,68 +434,114 @@ hardware_interface::CallbackReturn FanucHardwareInterface::on_cleanup(const rclc
   return CallbackReturn::SUCCESS;
 }
 
-std::vector<hardware_interface::StateInterface> FanucHardwareInterface::export_state_interfaces()
+void FanucHardwareInterface::setInterfaceValues()
 {
-  std::vector<hardware_interface::StateInterface> state_interfaces;
-  state_interfaces.reserve(2 * info_.joints.size());
+  state_values_.clear();
+  command_values_.clear();
   for (size_t i = 0; i < info_.joints.size(); ++i)
   {
-    state_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_POSITION, &fr_joint_pos_[i]);
-    state_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &fr_joint_vel_[i]);
+    const auto idx = static_cast<Eigen::Index>(i);
+    state_values_.push_back({ info_.joints[i].name, hardware_interface::HW_IF_POSITION, &fr_joint_pos_[idx], false });
+    state_values_.push_back({ info_.joints[i].name, hardware_interface::HW_IF_VELOCITY, &fr_joint_vel_[idx], false });
+    command_values_.push_back({ info_.joints[i].name, hardware_interface::HW_IF_POSITION, &joint_targets_[idx], false });
   }
 
   for (const auto& io_state : io_state_)
   {
-    state_interfaces.emplace_back(io_state->name(), std::to_string(io_state->index), &io_state->value);
+    state_values_.push_back({ io_state->name(), std::to_string(io_state->index), &io_state->value, true });
   }
 
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusInErrorType, &robot_status_.in_error);
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusTPEnabledType, &robot_status_.tp_enabled);
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusEStoppedType, &robot_status_.e_stopped);
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusMotionPossibleType, &robot_status_.motion_possible);
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusContactStopModeType, &robot_status_.contact_stop_mode);
-  state_interfaces.emplace_back(kRobotStatusInterfaceName, kStatusCollaborativeSpeedScalingType,
-                                &robot_status_.collaborative_speed_scaling);
+  state_values_.push_back({ kRobotStatusInterfaceName, kStatusInErrorType, &robot_status_.in_error, true });
+  state_values_.push_back({ kRobotStatusInterfaceName, kStatusTPEnabledType, &robot_status_.tp_enabled, true });
+  state_values_.push_back({ kRobotStatusInterfaceName, kStatusEStoppedType, &robot_status_.e_stopped, true });
+  state_values_.push_back(
+      { kRobotStatusInterfaceName, kStatusMotionPossibleType, &robot_status_.motion_possible, true });
+  state_values_.push_back(
+      { kRobotStatusInterfaceName, kStatusContactStopModeType, &robot_status_.contact_stop_mode, true });
+  state_values_.push_back({ kRobotStatusInterfaceName, kStatusCollaborativeSpeedScalingType,
+                            &robot_status_.collaborative_speed_scaling, true });
 
-  state_interfaces.emplace_back(kConnectionStatusName, kIsConnectedType, &robot_status_.is_connected);
-  state_interfaces.emplace_back(kConnectionStatusName, kMotionCommandType, &motion_command_type_dbl_);
+  state_values_.push_back({ kConnectionStatusName, kIsConnectedType, &robot_status_.is_connected, true });
+  state_values_.push_back({ kConnectionStatusName, kMotionCommandType, &motion_command_type_dbl_, true });
 
-  state_interfaces.emplace_back(kForceInterfaceName, kForceXType, &force_sensor_.force_x);
-  state_interfaces.emplace_back(kForceInterfaceName, kForceYType, &force_sensor_.force_y);
-  state_interfaces.emplace_back(kForceInterfaceName, kForceZType, &force_sensor_.force_z);
-  state_interfaces.emplace_back(kForceInterfaceName, kMomentXType, &force_sensor_.moment_x);
-  state_interfaces.emplace_back(kForceInterfaceName, kMomentYType, &force_sensor_.moment_y);
-  state_interfaces.emplace_back(kForceInterfaceName, kMomentZType, &force_sensor_.moment_z);
-  state_interfaces.emplace_back(kForceInterfaceName, kForceSensorType, &force_sensor_.fs_type);
+  state_values_.push_back({ kForceInterfaceName, kForceXType, &force_sensor_.force_x, true });
+  state_values_.push_back({ kForceInterfaceName, kForceYType, &force_sensor_.force_y, true });
+  state_values_.push_back({ kForceInterfaceName, kForceZType, &force_sensor_.force_z, true });
+  state_values_.push_back({ kForceInterfaceName, kMomentXType, &force_sensor_.moment_x, true });
+  state_values_.push_back({ kForceInterfaceName, kMomentYType, &force_sensor_.moment_y, true });
+  state_values_.push_back({ kForceInterfaceName, kMomentZType, &force_sensor_.moment_z, true });
+  state_values_.push_back({ kForceInterfaceName, kForceSensorType, &force_sensor_.fs_type, true });
 
   // For force_torque_sensor_broadcaster (geometry_msgs/WrenchStamped)
-  state_interfaces.emplace_back("ft_sensor", "force.x", &force_sensor_.force_x);
-  state_interfaces.emplace_back("ft_sensor", "force.y", &force_sensor_.force_y);
-  state_interfaces.emplace_back("ft_sensor", "force.z", &force_sensor_.force_z);
-  state_interfaces.emplace_back("ft_sensor", "torque.x", &force_sensor_.moment_x);
-  state_interfaces.emplace_back("ft_sensor", "torque.y", &force_sensor_.moment_y);
-  state_interfaces.emplace_back("ft_sensor", "torque.z", &force_sensor_.moment_z);
-
-  return state_interfaces;
-}
-
-std::vector<hardware_interface::CommandInterface> FanucHardwareInterface::export_command_interfaces()
-{
-  std::vector<hardware_interface::CommandInterface> command_interfaces;
-  command_interfaces.reserve(info_.joints.size());
-  for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(info_.joints.size()); ++i)
-  {
-    command_interfaces.emplace_back(info_.joints[i].name, hardware_interface::HW_IF_POSITION, &joint_targets_[i]);
-  }
+  state_values_.push_back({ "ft_sensor", "force.x", &force_sensor_.force_x, true });
+  state_values_.push_back({ "ft_sensor", "force.y", &force_sensor_.force_y, true });
+  state_values_.push_back({ "ft_sensor", "force.z", &force_sensor_.force_z, true });
+  state_values_.push_back({ "ft_sensor", "torque.x", &force_sensor_.moment_x, true });
+  state_values_.push_back({ "ft_sensor", "torque.y", &force_sensor_.moment_y, true });
+  state_values_.push_back({ "ft_sensor", "torque.z", &force_sensor_.moment_z, true });
 
   for (const auto& io_command : io_commands_)
   {
-    command_interfaces.emplace_back(io_command->name(), std::to_string(io_command->index), &io_command->value);
+    command_values_.push_back({ io_command->name(), std::to_string(io_command->index), &io_command->value, true });
   }
 
-  command_interfaces.emplace_back(kRMIInterfaceName, kRMICommandName, &dummy_rmi_command_);
+  command_values_.push_back({ kRMIInterfaceName, kRMICommandName, &dummy_rmi_command_, true });
+}
 
-  return command_interfaces;
+namespace
+{
+std::vector<hardware_interface::InterfaceDescription>
+makeUnlistedDescriptions(const std::vector<FanucHardwareInterface::InterfaceValue>& values)
+{
+  std::vector<hardware_interface::InterfaceDescription> descriptions;
+  for (const auto& value : values)
+  {
+    if (value.unlisted)
+    {
+      hardware_interface::InterfaceInfo info;
+      info.name = value.name;
+      info.initial_value = std::to_string(*value.value);
+      descriptions.emplace_back(value.prefix, info);
+    }
+  }
+  return descriptions;
+}
+}  // namespace
+
+std::vector<hardware_interface::InterfaceDescription>
+FanucHardwareInterface::export_unlisted_state_interface_descriptions()
+{
+  return makeUnlistedDescriptions(state_values_);
+}
+
+std::vector<hardware_interface::InterfaceDescription>
+FanucHardwareInterface::export_unlisted_command_interface_descriptions()
+{
+  return makeUnlistedDescriptions(command_values_);
+}
+
+void FanucHardwareInterface::writeStates()
+{
+  for (const auto& state : state_values_)
+  {
+    set_state(state.full_name, *state.value);
+  }
+}
+
+void FanucHardwareInterface::writeCommands()
+{
+  for (const auto& command : command_values_)
+  {
+    set_command(command.full_name, *command.value);
+  }
+}
+
+void FanucHardwareInterface::readCommands()
+{
+  for (const auto& command : command_values_)
+  {
+    *command.value = get_command<double>(command.full_name);
+  }
 }
 
 hardware_interface::return_type
@@ -645,7 +694,7 @@ hardware_interface::return_type FanucHardwareInterface::read(const rclcpp::Time&
   if (!hw_active_.load())
   {
     // is_connected should be updated beforehand.
-    // Do nothing
+    writeStates();
     return hardware_interface::return_type::OK;
   }
   if (!robot_status_.is_connected)
@@ -675,6 +724,7 @@ hardware_interface::return_type FanucHardwareInterface::read(const rclcpp::Time&
                   "FANUC ROS2 HW no longer streaming (this is normal during shutdown).");
       last_log_time = now;
     }
+    writeStates();
     return hardware_interface::return_type::ERROR;
   }
 
@@ -723,11 +773,13 @@ hardware_interface::return_type FanucHardwareInterface::read(const rclcpp::Time&
     return hardware_interface::return_type::ERROR;
   }
 
+  writeStates();
   return hardware_interface::return_type::OK;
 }
 
 hardware_interface::return_type FanucHardwareInterface::write(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
+  readCommands();
   robot_status_.is_connected = fanuc_client_ != nullptr && fanuc_client_->isStreaming();
   if (!hw_active_.load())
   {

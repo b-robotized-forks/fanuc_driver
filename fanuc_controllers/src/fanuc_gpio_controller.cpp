@@ -1440,65 +1440,52 @@ controller_interface::CallbackReturn FanucGPIOController::on_activate(const rclc
 
 controller_interface::return_type FanucGPIOController::update(const rclcpp::Time& time, const rclcpp::Duration& period)
 {
-  motion_command_type_.store(static_cast<int>(state_interfaces_[index_connection_status_[1]].get_value()));
+  motion_command_type_.store(static_cast<int>(state_interfaces_[index_connection_status_[1]].get_optional().value_or(
+      static_cast<double>(motion_command_type_.load()))));
 
   // Publish all state interface data
-  if (rt_analog_io_state_publisher_->trylock())
+  for (size_t i = 0; i < index_analog_io_state_.size(); ++i)
   {
-    for (size_t i = 0; i < index_analog_io_state_.size(); ++i)
-    {
-      analog_io_state_msg_.values[i].value = state_interfaces_[index_analog_io_state_[i]].get_value();
-    }
-    rt_analog_io_state_publisher_->msg_ = analog_io_state_msg_;
-    rt_analog_io_state_publisher_->unlockAndPublish();
+    analog_io_state_msg_.values[i].value =
+        state_interfaces_[index_analog_io_state_[i]].get_optional().value_or(analog_io_state_msg_.values[i].value);
   }
+  rt_analog_io_state_publisher_->try_publish(analog_io_state_msg_);
 
-  if (rt_connection_status_publisher_->trylock())
+  connection_status_msg_.is_connected =
+      state_interfaces_[index_connection_status_[0]].get_optional().value_or(connection_status_msg_.is_connected);
+  rt_connection_status_publisher_->try_publish(connection_status_msg_);
+
+  for (size_t i = 0; i < index_io_state_.size(); ++i)
   {
-    connection_status_msg_.is_connected = state_interfaces_[index_connection_status_[0]].get_value();
-    rt_connection_status_publisher_->msg_ = connection_status_msg_;
-    rt_connection_status_publisher_->unlockAndPublish();
+    io_state_msg_.values[i].value =
+        state_interfaces_[index_io_state_[i]].get_optional().value_or(io_state_msg_.values[i].value);
   }
+  rt_io_state_publisher_->try_publish(io_state_msg_);
 
-  if (rt_io_state_publisher_->trylock())
+  for (size_t i = 0; i < index_num_reg_state_.size(); ++i)
   {
-    for (size_t i = 0; i < index_io_state_.size(); ++i)
-    {
-      io_state_msg_.values[i].value = state_interfaces_[index_io_state_[i]].get_value();
-    }
-    rt_io_state_publisher_->msg_ = io_state_msg_;
-    rt_io_state_publisher_->unlockAndPublish();
+    num_reg_state_msg_.values[i].value =
+        state_interfaces_[index_num_reg_state_[i]].get_optional().value_or(num_reg_state_msg_.values[i].value);
   }
+  rt_num_reg_state_publisher_->try_publish(num_reg_state_msg_);
 
-  if (rt_num_reg_state_publisher_->trylock())
-  {
-    for (size_t i = 0; i < index_num_reg_state_.size(); ++i)
-    {
-      num_reg_state_msg_.values[i].value = state_interfaces_[index_num_reg_state_[i]].get_value();
-    }
-    rt_num_reg_state_publisher_->msg_ = num_reg_state_msg_;
-    rt_num_reg_state_publisher_->unlockAndPublish();
-  }
+  robot_status_msg_.contact_stop_mode =
+      state_interfaces_[index_robot_status_[0]].get_optional().value_or(robot_status_msg_.contact_stop_mode);
+  robot_status_msg_.e_stopped =
+      state_interfaces_[index_robot_status_[1]].get_optional().value_or(robot_status_msg_.e_stopped);
+  robot_status_msg_.in_error =
+      state_interfaces_[index_robot_status_[2]].get_optional().value_or(robot_status_msg_.in_error);
+  robot_status_msg_.motion_possible =
+      state_interfaces_[index_robot_status_[3]].get_optional().value_or(robot_status_msg_.motion_possible);
+  robot_status_msg_.tp_enabled =
+      state_interfaces_[index_robot_status_[4]].get_optional().value_or(robot_status_msg_.tp_enabled);
 
-  if (rt_robot_status_publisher_->trylock())
-  {
-    robot_status_msg_.contact_stop_mode = state_interfaces_[index_robot_status_[0]].get_value();
-    robot_status_msg_.e_stopped = state_interfaces_[index_robot_status_[1]].get_value();
-    robot_status_msg_.in_error = state_interfaces_[index_robot_status_[2]].get_value();
-    robot_status_msg_.motion_possible = state_interfaces_[index_robot_status_[3]].get_value();
-    robot_status_msg_.tp_enabled = state_interfaces_[index_robot_status_[4]].get_value();
+  rt_robot_status_publisher_->try_publish(robot_status_msg_);
 
-    rt_robot_status_publisher_->msg_ = robot_status_msg_;
-    rt_robot_status_publisher_->unlockAndPublish();
-  }
-
-  if (rt_collaborative_speed_scaling_publisher_->trylock())
-  {
-    collaborative_speed_scaling_msg_.collaborative_speed_scaling =
-        state_interfaces_[index_collaborative_speed_scaling_].get_value();
-    rt_collaborative_speed_scaling_publisher_->msg_ = collaborative_speed_scaling_msg_;
-    rt_collaborative_speed_scaling_publisher_->unlockAndPublish();
-  }
+  collaborative_speed_scaling_msg_.collaborative_speed_scaling =
+      state_interfaces_[index_collaborative_speed_scaling_].get_optional().value_or(
+          collaborative_speed_scaling_msg_.collaborative_speed_scaling);
+  rt_collaborative_speed_scaling_publisher_->try_publish(collaborative_speed_scaling_msg_);
 
   // Set all command interfaces from the received messages
   const auto analog_io_cmd_msg_new = *rt_analog_io_cmd_buffer_.readFromRT();
