@@ -46,7 +46,7 @@ controller_interface::CallbackReturn ScaledJointTrajectoryController::on_activat
 controller_interface::return_type ScaledJointTrajectoryController::update(const rclcpp::Time& time,
                                                                           const rclcpp::Duration& period)
 {
-  if (!state_interfaces_.empty() && state_interfaces_.back().get_value() == 0.0)
+  if (!state_interfaces_.empty() && state_interfaces_.back().get_optional().value_or(0.0) == 0.0)
   {
     last_is_connected_ = false;
     // The robot state indicated that STMO does not have the motion control.
@@ -71,7 +71,7 @@ controller_interface::return_type ScaledJointTrajectoryController::update(const 
     --it;  // back
     --it;  // back - 1
 
-    double tmp_scaling_factor = it->get_value();
+    double tmp_scaling_factor = it->get_optional().value_or(scaling_factor_);
     if (std::isfinite(tmp_scaling_factor))
     {
       scaling_factor_ = tmp_scaling_factor;

@@ -23,6 +23,18 @@ struct IOStateInterface;
 class FanucHardwareInterface : public hardware_interface::SystemInterface
 {
 public:
+  // Value of an interface. The handles own the values: read() copies the states to the handles,
+  // write() copies the commands from the handles. The joint interfaces come from the URDF, all
+  // others are unlisted interfaces.
+  struct InterfaceValue
+  {
+    std::string prefix;
+    std::string name;
+    double* value;
+    bool unlisted;
+    std::string full_name = prefix + "/" + name;
+  };
+
   FanucHardwareInterface();
 
   FanucHardwareInterface(const FanucHardwareInterface&) = delete;
@@ -31,7 +43,8 @@ public:
 
   ~FanucHardwareInterface() override;
 
-  hardware_interface::CallbackReturn on_init(const hardware_interface::HardwareInfo& info) override;
+  hardware_interface::CallbackReturn
+  on_init(const hardware_interface::HardwareComponentInterfaceParams& params) override;
 
   hardware_interface::CallbackReturn on_configure(const rclcpp_lifecycle::State& previous_state) override;
 
@@ -43,9 +56,9 @@ public:
 
   hardware_interface::CallbackReturn on_shutdown(const rclcpp_lifecycle::State& previous_state) override;
 
-  std::vector<hardware_interface::StateInterface> export_state_interfaces() final;
+  std::vector<hardware_interface::InterfaceDescription> export_unlisted_state_interface_descriptions() override;
 
-  std::vector<hardware_interface::CommandInterface> export_command_interfaces() final;
+  std::vector<hardware_interface::InterfaceDescription> export_unlisted_command_interface_descriptions() override;
 
   hardware_interface::return_type read(const rclcpp::Time& time, const rclcpp::Duration& period) override;
 
@@ -104,6 +117,14 @@ private:
 
   std::vector<std::unique_ptr<IOCommandInterface>> io_commands_;
   std::vector<std::unique_ptr<IOStateInterface>> io_state_;
+
+  std::vector<InterfaceValue> state_values_;
+  std::vector<InterfaceValue> command_values_;
+
+  void setInterfaceValues();
+  void writeStates();
+  void writeCommands();
+  void readCommands();
 };
 
 }  // namespace fanuc_robot_driver
