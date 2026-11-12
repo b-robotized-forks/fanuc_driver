@@ -15,7 +15,7 @@ set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 if("$ENV{ROS_DISTRO}" STREQUAL "humble")
     message(FATAL_ERROR "This branch is targeting Jazzy Jalisco. Please use the `humble` branch for Humble Hawksbill. ")
-elseif(NOT "$ENV{ROS_DISTRO}" STREQUAL "jazzy")
+elseif(NOT "$ENV{ROS_DISTRO}" MATCHES "^(jazzy|lyrical)$")
     message(FATAL_ERROR "Unknown distribution: $ENV{ROS_DISTRO}")
 endif()
 
