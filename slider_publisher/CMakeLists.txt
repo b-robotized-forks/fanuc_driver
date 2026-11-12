@@ -21,7 +21,7 @@ find_package(Qt5 COMPONENTS Widgets Core REQUIRED)
 
 # Add executable
 add_executable(slider_gui_node src/slider_gui_node.cpp)
-ament_target_dependencies(slider_gui_node rclcpp std_msgs sensor_msgs)
+target_link_libraries(slider_gui_node ${rclcpp_TARGETS} ${std_msgs_TARGETS} ${sensor_msgs_TARGETS})
 target_link_libraries(slider_gui_node Qt5::Widgets Qt5::Core)
 
 # Install executable

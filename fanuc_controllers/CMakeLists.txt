@@ -45,19 +45,19 @@ add_library(scaled_joint_trajectory_controller SHARED
 )
 
 # Link dependencies
-ament_target_dependencies(scaled_joint_trajectory_controller
-    controller_interface
-    controller_manager_msgs
-    geometry_msgs
-    hardware_interface
-    joint_trajectory_controller
-    lifecycle_msgs
-    pluginlib
-    rclcpp
-    realtime_tools
-    sensor_msgs
-    std_msgs
-    trajectory_msgs
+target_link_libraries(scaled_joint_trajectory_controller
+  ${controller_interface_TARGETS}
+  ${controller_manager_msgs_TARGETS}
+  ${geometry_msgs_TARGETS}
+  ${hardware_interface_TARGETS}
+  ${joint_trajectory_controller_TARGETS}
+  ${lifecycle_msgs_TARGETS}
+  ${pluginlib_TARGETS}
+  ${rclcpp_TARGETS}
+  ${realtime_tools_TARGETS}
+  ${sensor_msgs_TARGETS}
+  ${std_msgs_TARGETS}
+  ${trajectory_msgs_TARGETS}
 )
 target_link_libraries(scaled_joint_trajectory_controller fanuc_hardware_interface::fanuc_hardware_interface_constants)
 
@@ -67,19 +67,19 @@ add_library(fanuc_gpio_controller SHARED
 )
 
 # Link dependencies
-ament_target_dependencies(fanuc_gpio_controller
-    ament_index_cpp
-    controller_interface
-    controller_manager_msgs
-    fanuc_msgs
-    hardware_interface
-    joint_trajectory_controller
-    lifecycle_msgs
-    pluginlib
-    rclcpp
-    realtime_tools
-    std_msgs
-    trajectory_msgs
+target_link_libraries(fanuc_gpio_controller
+  ${ament_index_cpp_TARGETS}
+  ${controller_interface_TARGETS}
+  ${controller_manager_msgs_TARGETS}
+  ${fanuc_msgs_TARGETS}
+  ${hardware_interface_TARGETS}
+  ${joint_trajectory_controller_TARGETS}
+  ${lifecycle_msgs_TARGETS}
+  ${pluginlib_TARGETS}
+  ${rclcpp_TARGETS}
+  ${realtime_tools_TARGETS}
+  ${std_msgs_TARGETS}
+  ${trajectory_msgs_TARGETS}
 )
 target_link_libraries(fanuc_gpio_controller fanuc_libs::fanuc_client fanuc_libs::gpio_config
     fanuc_hardware_interface::fanuc_hardware_interface_constants)
@@ -90,19 +90,19 @@ add_library(fanuc_force_sensor_broadcaster SHARED
 )
 
 # Link dependencies
-ament_target_dependencies(fanuc_force_sensor_broadcaster
-    ament_index_cpp
-    controller_interface
-    controller_manager_msgs
-    fanuc_msgs
-    hardware_interface
-    joint_trajectory_controller
-    lifecycle_msgs
-    pluginlib
-    rclcpp
-    realtime_tools
-    std_msgs
-    trajectory_msgs
+target_link_libraries(fanuc_force_sensor_broadcaster
+  ${ament_index_cpp_TARGETS}
+  ${controller_interface_TARGETS}
+  ${controller_manager_msgs_TARGETS}
+  ${fanuc_msgs_TARGETS}
+  ${hardware_interface_TARGETS}
+  ${joint_trajectory_controller_TARGETS}
+  ${lifecycle_msgs_TARGETS}
+  ${pluginlib_TARGETS}
+  ${rclcpp_TARGETS}
+  ${realtime_tools_TARGETS}
+  ${std_msgs_TARGETS}
+  ${trajectory_msgs_TARGETS}
 )
 target_link_libraries(fanuc_force_sensor_broadcaster fanuc_libs::fanuc_client
     fanuc_hardware_interface::fanuc_hardware_interface_constants)
