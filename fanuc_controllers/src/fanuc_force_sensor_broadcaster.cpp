@@ -106,19 +106,22 @@ controller_interface::return_type FanucForceSensorBroadcaster::update(const rclc
                                                                       const rclcpp::Duration& period)
 {
   // Publish all state interface data
-  if (rt_force_sensor_publisher_->trylock())
-  {
-    force_sensor_msg_.force_x = state_interfaces_[index_force_sensor_[0]].get_value();
-    force_sensor_msg_.force_y = state_interfaces_[index_force_sensor_[1]].get_value();
-    force_sensor_msg_.force_z = state_interfaces_[index_force_sensor_[2]].get_value();
-    force_sensor_msg_.moment_x = state_interfaces_[index_force_sensor_[3]].get_value();
-    force_sensor_msg_.moment_y = state_interfaces_[index_force_sensor_[4]].get_value();
-    force_sensor_msg_.moment_z = state_interfaces_[index_force_sensor_[5]].get_value();
-    force_sensor_msg_.fs_type = state_interfaces_[index_force_sensor_[6]].get_value();
+  force_sensor_msg_.force_x =
+      state_interfaces_[index_force_sensor_[0]].get_optional().value_or(force_sensor_msg_.force_x);
+  force_sensor_msg_.force_y =
+      state_interfaces_[index_force_sensor_[1]].get_optional().value_or(force_sensor_msg_.force_y);
+  force_sensor_msg_.force_z =
+      state_interfaces_[index_force_sensor_[2]].get_optional().value_or(force_sensor_msg_.force_z);
+  force_sensor_msg_.moment_x =
+      state_interfaces_[index_force_sensor_[3]].get_optional().value_or(force_sensor_msg_.moment_x);
+  force_sensor_msg_.moment_y =
+      state_interfaces_[index_force_sensor_[4]].get_optional().value_or(force_sensor_msg_.moment_y);
+  force_sensor_msg_.moment_z =
+      state_interfaces_[index_force_sensor_[5]].get_optional().value_or(force_sensor_msg_.moment_z);
+  force_sensor_msg_.fs_type =
+      state_interfaces_[index_force_sensor_[6]].get_optional().value_or(force_sensor_msg_.fs_type);
 
-    rt_force_sensor_publisher_->msg_ = force_sensor_msg_;
-    rt_force_sensor_publisher_->unlockAndPublish();
-  }
+  rt_force_sensor_publisher_->try_publish(force_sensor_msg_);
 
   return controller_interface::return_type::OK;
 }
