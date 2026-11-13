@@ -46,22 +46,25 @@ TEST(GPIOControllerTest, DISABLED_ROS2ControlLifecycle)
                                                                { "J3", "position", 2 } } };
   std::vector<InterfaceConfig> state_interface_configs = command_interface_configs;
 
+  const auto make_description = [](const InterfaceConfig& config) {
+    hardware_interface::InterfaceInfo info;
+    info.name = config.type;
+    info.initial_value = std::to_string(config.value);
+    return hardware_interface::InterfaceDescription(config.name, info);
+  };
+
   std::vector<hardware_interface::LoanedCommandInterface> loaned_command_interfaces;
-  std::vector<hardware_interface::CommandInterface> command_interfaces;
-  command_interfaces.reserve(command_interface_configs.size());
-  for (auto& [name, type, value] : command_interface_configs)
+  for (const auto& config : command_interface_configs)
   {
-    command_interfaces.emplace_back(name, type, &value);
-    loaned_command_interfaces.emplace_back(command_interfaces.back());
+    loaned_command_interfaces.emplace_back(
+        std::make_shared<hardware_interface::CommandInterface>(make_description(config)), nullptr);
   }
 
   std::vector<hardware_interface::LoanedStateInterface> loaned_state_interfaces;
-  std::vector<hardware_interface::StateInterface> state_interfaces;
-  state_interfaces.reserve(state_interface_configs.size());
-  for (auto& [name, type, value] : state_interface_configs)
+  for (const auto& config : state_interface_configs)
   {
-    state_interfaces.emplace_back(name, type, &value);
-    loaned_state_interfaces.emplace_back(state_interfaces.back());
+    loaned_state_interfaces.emplace_back(std::make_shared<hardware_interface::StateInterface>(make_description(config)),
+                                         nullptr);
   }
 
   const auto node = std::make_shared<rclcpp::Node>("controller_manager");
