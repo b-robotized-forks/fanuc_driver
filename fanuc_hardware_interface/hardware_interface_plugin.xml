@@ -12,4 +12,11 @@ SPDX-License-Identifier: Apache-2.0
 		ROS2 Control System Driver for FANUC Robots.
     </description>
   </class>
+  <class name="fanuc_robot_driver/FanucMockHardwareInterface"
+         type="fanuc_robot_driver::FanucMockHardwareInterface"
+         base_class_type="hardware_interface::SystemInterface">
+    <description>
+		Mock FANUC robot with an RMI connection that FanucGPIOController can reset.
+    </description>
+  </class>
 </library>

@@ -1,0 +1,7 @@
+# SPDX-FileCopyrightText: 2026, b»robotized group
+#
+# SPDX-License-Identifier: Apache-2.0
+
+add_executable(mock_hardware_interface_test mock_hardware_interface_test.cpp)
+target_link_libraries(mock_hardware_interface_test PRIVATE fanuc_robot_driver GTest::gtest_main)
+gtest_discover_tests(mock_hardware_interface_test)
