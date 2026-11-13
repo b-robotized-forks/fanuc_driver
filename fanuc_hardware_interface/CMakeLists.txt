@@ -24,7 +24,7 @@ find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(fanuc_libs REQUIRED)
 
-add_library(fanuc_robot_driver SHARED src/hardware_interface.cpp)
+add_library(fanuc_robot_driver SHARED src/hardware_interface.cpp src/mock_hardware_interface.cpp)
 
 target_link_libraries(fanuc_robot_driver PUBLIC
   pluginlib::pluginlib
@@ -38,7 +38,7 @@ if(${hardware_interface_VERSION} VERSION_LESS 2.52.0)
   target_link_libraries(fanuc_robot_driver PUBLIC ${hardware_interface_LIBRARIES})
   target_include_directories(fanuc_robot_driver PRIVATE ${hardware_interface_INCLUDE_DIRS})
 else()
-  target_link_libraries(fanuc_robot_driver PUBLIC hardware_interface::hardware_interface)
+  target_link_libraries(fanuc_robot_driver PUBLIC hardware_interface::hardware_interface hardware_interface::mock_components)
 endif()
 
 target_include_directories(fanuc_robot_driver PUBLIC
@@ -57,7 +57,10 @@ target_include_directories(fanuc_hardware_interface_constants INTERFACE
 
 
 if(BUILD_TESTING)
-  #  ...
+  find_package(GTest REQUIRED)
+  include(GoogleTest)
+  enable_testing()
+  add_subdirectory(test)
 endif()
 
 install(

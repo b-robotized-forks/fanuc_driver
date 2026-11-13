@@ -172,16 +172,34 @@
       </gpio>
 
       <gpio name="ConnectionStatus">
-        <state_interface name="is_connected"/>
+        <state_interface name="is_connected">
+          <param name="initial_value">1</param>
+        </state_interface>
       </gpio>
 
+      <!-- Initial values of a healthy robot in AUTO mode. -->
       <gpio name="Status">
         <state_interface name="collaborative_speed_scaling"/>
-        <state_interface name="contact_stop_mode"/>
-        <state_interface name="e_stopped"/>
-        <state_interface name="in_error"/>
-        <state_interface name="motion_possible"/>
-        <state_interface name="tp_enabled"/>
+        <state_interface name="contact_stop_mode">
+          <param name="initial_value">0</param>
+        </state_interface>
+        <state_interface name="e_stopped">
+          <param name="initial_value">0</param>
+        </state_interface>
+        <state_interface name="in_error">
+          <param name="initial_value">0</param>
+        </state_interface>
+        <state_interface name="motion_possible">
+          <param name="initial_value">1</param>
+        </state_interface>
+        <state_interface name="tp_enabled">
+          <param name="initial_value">0</param>
+        </state_interface>
+      </gpio>
+
+      <!-- A new value facility * 1000 + number raises that alarm once, e.g. 11050 is SRVO-050. -->
+      <gpio name="MockErrorInjection">
+        <command_interface name="alarm"/>
       </gpio>
 
       <sensor name="Force">
@@ -204,7 +222,7 @@
       </sensor>
 
       <hardware>
-        <plugin>mock_components/GenericSystem</plugin>
+        <plugin>fanuc_robot_driver/FanucMockHardwareInterface</plugin>
         <param name="state_following_offset">0.0</param>
         <param name="calculate_dynamics">true</param>
       </hardware>
