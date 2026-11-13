@@ -88,6 +88,11 @@ protected:
     executor_.add_node(controller_->get_node()->get_node_base_interface());
     executor_.add_node(client_node_);
     executor_thread_ = std::thread([this]() { executor_.spin(); });
+    // cancel() in TearDown() has no effect before spin() starts.
+    while (!executor_.is_spinning())
+    {
+      std::this_thread::sleep_for(1ms);
+    }
 
     time_ = controller_->get_node()->now();
   }
