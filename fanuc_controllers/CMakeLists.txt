@@ -40,6 +40,21 @@ find_package(trajectory_msgs REQUIRED)
 # Include directories
 include_directories(include)
 
+# JointTrajectoryController is a ChainableControllerInterface in newer ros2_controllers.
+# Its update() is final then, and the scaled controller overrides update_and_write_commands().
+get_target_property(_jtc_include_dirs joint_trajectory_controller::joint_trajectory_controller
+    INTERFACE_INCLUDE_DIRECTORIES)
+find_file(_jtc_header joint_trajectory_controller/joint_trajectory_controller.hpp
+    PATHS ${_jtc_include_dirs} ${joint_trajectory_controller_INCLUDE_DIRS}
+    NO_DEFAULT_PATH NO_CACHE REQUIRED)
+file(STRINGS "${_jtc_header}" _jtc_chainable REGEX "update_and_write_commands")
+if (_jtc_chainable)
+  message(STATUS "JointTrajectoryController is chainable: ${_jtc_header}")
+  set(SCALED_JTC_PLUGINS_XML scaled_joint_trajectory_controller_chainable_plugins.xml)
+else ()
+  set(SCALED_JTC_PLUGINS_XML scaled_joint_trajectory_controller_plugins.xml)
+endif ()
+
 # Build the scaled joint trajectory controller library
 add_library(scaled_joint_trajectory_controller SHARED
     src/scaled_joint_trajectory_controller.cpp
@@ -61,6 +76,9 @@ ament_target_dependencies(scaled_joint_trajectory_controller
     trajectory_msgs
 )
 target_link_libraries(scaled_joint_trajectory_controller fanuc_hardware_interface::fanuc_hardware_interface_constants)
+if (_jtc_chainable)
+  target_compile_definitions(scaled_joint_trajectory_controller PUBLIC FANUC_CONTROLLERS_CHAINABLE_JTC)
+endif ()
 
 # Build the FANUC GPIO controller library
 add_library(fanuc_gpio_controller SHARED
@@ -146,7 +164,6 @@ install(TARGETS
 
 # Install plugin description
 install(FILES
-    scaled_joint_trajectory_controller_plugins.xml
     fanuc_gpio_controller_plugins.xml
     fanuc_force_sensor_broadcaster_plugins.xml
     fanuc_rmi_controller_plugins.xml
@@ -154,7 +171,7 @@ install(FILES
 )
 
 # Export pluginlib plugins
-pluginlib_export_plugin_description_file(controller_interface scaled_joint_trajectory_controller_plugins.xml)
+pluginlib_export_plugin_description_file(controller_interface ${SCALED_JTC_PLUGINS_XML})
 pluginlib_export_plugin_description_file(controller_interface fanuc_gpio_controller_plugins.xml)
 pluginlib_export_plugin_description_file(controller_interface fanuc_force_sensor_broadcaster_plugins.xml)
 pluginlib_export_plugin_description_file(controller_interface fanuc_rmi_controller_plugins.xml)

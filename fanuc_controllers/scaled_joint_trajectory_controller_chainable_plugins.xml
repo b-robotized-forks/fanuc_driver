@@ -1,0 +1,19 @@
+<!--
+SPDX-FileCopyrightText: 2025, FANUC America Corporation
+SPDX-FileCopyrightText: 2025, FANUC CORPORATION
+SPDX-License-Identifier: Apache-2.0
+-->
+
+<library path="scaled_joint_trajectory_controller">
+  <class
+    name="fanuc_controllers/ScaledJointTrajectoryController"
+    type="fanuc_controllers::ScaledJointTrajectoryController"
+    base_class_type="controller_interface::ChainableControllerInterface"
+  >
+    <description>
+      A scaled joint trajectory controller that extends the standard joint
+      trajectory controller
+      with speed scaling capabilities from hardware interfaces.
+    </description>
+  </class>
+</library>

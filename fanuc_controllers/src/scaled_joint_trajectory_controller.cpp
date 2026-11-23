@@ -137,8 +137,13 @@ ScaledJointTrajectoryController::on_deactivate(const rclcpp_lifecycle::State& pr
   return JointTrajectoryController::on_deactivate(previous_state);
 }
 
+#ifdef FANUC_CONTROLLERS_CHAINABLE_JTC
+controller_interface::return_type
+ScaledJointTrajectoryController::update_and_write_commands(const rclcpp::Time& time, const rclcpp::Duration& period)
+#else
 controller_interface::return_type ScaledJointTrajectoryController::update(const rclcpp::Time& time,
                                                                           const rclcpp::Duration& period)
+#endif
 {
   if (motion_possible_interface_->get().get_optional().value_or(0.0) == 0.0)
   {
@@ -166,7 +171,11 @@ controller_interface::return_type ScaledJointTrajectoryController::update(const 
   const double time_scale = 0.01 * first_order_lag_filter(time_scale_value_.load(), period.seconds());
   scaling_factor_.store(robot_scaling_factor_ * time_scale);
 
+#ifdef FANUC_CONTROLLERS_CHAINABLE_JTC
+  return JointTrajectoryController::update_and_write_commands(time, period);
+#else
   return JointTrajectoryController::update(time, period);
+#endif
 }
 
 void ScaledJointTrajectoryController::abort_active_goal(const std::string& error_string)
@@ -202,4 +211,9 @@ void ScaledJointTrajectoryController::time_scale_callback(const std::shared_ptr<
 
 #include "pluginlib/class_list_macros.hpp"
 
+#ifdef FANUC_CONTROLLERS_CHAINABLE_JTC
+PLUGINLIB_EXPORT_CLASS(fanuc_controllers::ScaledJointTrajectoryController,
+                       controller_interface::ChainableControllerInterface)
+#else
 PLUGINLIB_EXPORT_CLASS(fanuc_controllers::ScaledJointTrajectoryController, controller_interface::ControllerInterface)
+#endif

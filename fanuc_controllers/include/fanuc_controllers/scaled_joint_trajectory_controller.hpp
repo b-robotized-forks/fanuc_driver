@@ -29,6 +29,9 @@ namespace fanuc_controllers
  * While robot_status/motion_possible is false, the controller aborts the active goal and does not
  * write commands. When motion is possible again, it holds the current position.
  */
+// FANUC_CONTROLLERS_CHAINABLE_JTC is set by CMake when JointTrajectoryController is a
+// ChainableControllerInterface. Its update() is final then, and this controller overrides
+// update_and_write_commands() instead.
 class ScaledJointTrajectoryController : public joint_trajectory_controller::JointTrajectoryController
 {
 public:
@@ -43,7 +46,12 @@ public:
 
   controller_interface::CallbackReturn on_deactivate(const rclcpp_lifecycle::State& previous_state) override;
 
+#ifdef FANUC_CONTROLLERS_CHAINABLE_JTC
+  controller_interface::return_type update_and_write_commands(const rclcpp::Time& time,
+                                                              const rclcpp::Duration& period) override;
+#else
   controller_interface::return_type update(const rclcpp::Time& time, const rclcpp::Duration& period) override;
+#endif
 
 private:
   using StateInterfaceRef = std::reference_wrapper<hardware_interface::LoanedStateInterface>;
